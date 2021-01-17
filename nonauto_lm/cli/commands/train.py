@@ -56,7 +56,7 @@ class TrainCommand(Command):
             "tags",
             None,
             description=(
-                "Tags for train run in Weights&Biases Dashboard."
+                "Tags for train run in Weights&Biases Dashboard. "
                 "Considered only if `use-wandb` is set True."
             ),
             flag=False,
@@ -99,6 +99,7 @@ class TrainCommand(Command):
         config["serialization_dir"] = str(serialization_dir)
         config["use_wandb"] = use_wandb
         config["cuda_devices"] = self.parse_cuda_devices()
+        config["tags"] = self.parse_tags()
         # Run train worker in distributed mode or not depending on cuda devices
         if len(config["cuda_devices"]) > 1:
             ddp.spawn(process=train_worker, args=config, world_size=len(config["cuda_devices"]))
@@ -121,5 +122,5 @@ class TrainCommand(Command):
 
     def parse_tags(self) -> List[str]:
         tags = self.option("tags")
-        regex = r"([a-z0-9\_\-\.\+\\\/]+)"
+        regex = r"[a-z0-9\_\-\.\+\\\/\s]+"
         return re.findall(regex, tags, flags=re.I) if tags is not None else None
