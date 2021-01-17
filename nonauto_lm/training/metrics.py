@@ -25,9 +25,8 @@ class Perplexity(Metric):
         _total_value = list(util.unwrap_to_tensors(value))[0]
         _count = 1
         if util.dist_available():
-            device = torch.device("cuda" if dist.get_backend() == "nccl" else "cpu")
-            count = torch.tensor(_count, device=device)
-            total_value = torch.tensor(_total_value, device=device)
+            count = torch.tensor(_count, device=value.device)
+            total_value = torch.tensor(_total_value, device=value.device)
             # Reduce from all processes
             dist.all_reduce(count, op=dist.ReduceOp.SUM)
             dist.all_reduce(total_value, op=dist.ReduceOp.SUM)
