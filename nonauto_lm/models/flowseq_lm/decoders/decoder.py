@@ -1,6 +1,6 @@
 import torch
 from abc import ABC, abstractmethod
-from nonauto_lm.base import TorchModule
+from nonauto_lm.models.base import TorchModule
 from torch_nlp_utils.common import Registrable
 
 

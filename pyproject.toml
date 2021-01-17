@@ -15,6 +15,7 @@ scikit-learn = "^0.24.0"
 overrides = "^3.1.0"
 cached-property = "^1.5.2"
 einops = "^0.3.0"
+wandb = "^0.10.14"
 torch-nlp-utils = {git = "https://github.com/Nemexur/torch-nlp-utils.git"}
 
 [tool.poetry.dev-dependencies]

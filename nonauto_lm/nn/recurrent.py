@@ -1,6 +1,6 @@
 import torch
 from torch_nlp_utils.common import Registrable
-from nonauto_lm.base import TorchModule
+from nonauto_lm.models.base import TorchModule
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 

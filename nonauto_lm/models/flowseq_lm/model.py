@@ -3,7 +3,7 @@ import torch
 from overrides import overrides
 import nonauto_lm.nn.utils as util
 from torch_nlp_utils.data import Vocabulary
-from nonauto_lm.base import NonAutoLmModel, PriorSample, PosteriorSample, Embedder, LatentSample
+from nonauto_lm.models.base import NonAutoLmModel, PriorSample, PosteriorSample, Embedder, LatentSample
 # Modules
 from .priors import Prior
 from .posteriors import Posterior

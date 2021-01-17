@@ -1,7 +1,7 @@
 from typing import Tuple
 import torch
 from torch_nlp_utils.common import Registrable
-from nonauto_lm.base import TorchModule
+from nonauto_lm.models.base import TorchModule
 
 
 class Flow(TorchModule, Registrable):

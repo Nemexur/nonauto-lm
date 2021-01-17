@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Any, Union, Type, T, NamedTuple
+from typing import List, Tuple, Dict, Union, Type, T, NamedTuple
 import torch
 from pathlib import Path
 from einops import repeat
@@ -6,10 +6,10 @@ import nonauto_lm.nn.utils as util
 from collections import OrderedDict
 from .losses import LabelSmoothingNLL
 from .torch_module import TorchModule
-from nonauto_lm.metrics import Perplexity
 from torch_nlp_utils.data import Vocabulary
-from torch_nlp_utils.common import Registrable
 from nonauto_lm.nn.kl_scheduler import KLScheduler
+from nonauto_lm.training.metrics import Perplexity
+from torch_nlp_utils.common import Registrable, Params
 
 
 class LatentSample(NamedTuple):
@@ -279,7 +279,7 @@ class NonAutoLmModel(TorchModule, Registrable):
     @classmethod
     def load(
         cls: Type[T],
-        params: Dict[str, Any],
+        params: Params,
         weights: Union[Path, OrderedDict] = None,
         device: int = -1,
     ) -> T:

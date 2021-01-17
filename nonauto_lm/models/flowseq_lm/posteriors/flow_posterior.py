@@ -3,8 +3,8 @@ import torch
 from overrides import overrides
 # Modules
 from .posterior import Posterior
-from nonauto_lm.base import LatentSample
-from nonauto_lm.flowseq_lm.flows import Flow
+from nonauto_lm.models.base import LatentSample
+from nonauto_lm.models.flowseq_lm.flows import Flow
 
 
 @Posterior.register("flow")

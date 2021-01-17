@@ -6,7 +6,7 @@ from overrides import overrides
 from einops import repeat, rearrange
 from cached_property import cached_property
 from torch_nlp_utils.common import Registrable
-from nonauto_lm.base import TorchModule, LatentSample
+from nonauto_lm.models.base import TorchModule, LatentSample
 
 
 class Prior(TorchModule, Registrable):

@@ -2,19 +2,20 @@ from typing import Iterable, Dict, Any, Union
 import os
 import json
 import torch
+import wandb
 from copy import deepcopy
 from loguru import logger
-import nonauto_lm.ddp as ddp
 import torch.distributed as dist
 import nonauto_lm.nn.utils as util
+import nonauto_lm.training.ddp as ddp
 from torch.nn.utils import clip_grad_norm_
-from torch_nlp_utils.data import DataIterator, Batch
 from torch.nn.parallel import DistributedDataParallel
+from torch_nlp_utils.data import DataIterator, CollateBatch
 from torch_nlp_utils.callbacks import EarlyStopping, SaveCheckpoint
 # Modules
-from .base import NonAutoLmModel
-from .nn.optimizer import Optimizer
-from .nn.lr_scheduler import LRScheduler
+from nonauto_lm.models.base import NonAutoLmModel
+from nonauto_lm.nn.optimizer import Optimizer
+from nonauto_lm.nn.lr_scheduler import LRScheduler
 
 
 def description_from_metrics(metrics: Dict[str, float]) -> str:
@@ -38,6 +39,7 @@ def log_metrics(
     mode_str: str,
     metrics: Dict[str, float],
     epoch: int = None,
+    log_to_wandb: bool = False,
 ) -> None:
     """
     Pretty log metrics and sort them by length and alphabetic order.
@@ -60,6 +62,8 @@ def log_metrics(
     for metric in sorted(metrics, key=lambda x: (len(x), x)):
         metric_value = metrics.get(metric)
         logger.info(f"{metric.ljust(max_length)} | {metric_value:.4f}")
+    if log_to_wandb:
+        wandb.log({f"{mode_str.lower()}/{k}": v for k, v in metrics.items()})
 
 
 class Trainer:
@@ -70,6 +74,7 @@ class Trainer:
         scheduler: LRScheduler,
         epochs: int,
         serialization_dir: str,
+        use_wandb: bool = True,
         distributed: bool = False,
         cuda_device: Union[int, torch.device] = -1,
         local_rank: int = 0,
@@ -87,7 +92,7 @@ class Trainer:
         self._model_dir = serialization_dir
         self._epochs = epochs
         self._rank = local_rank
-        self._master = self._rank == 0
+        self._is_master = self._rank == 0
         self._world_size = world_size
         if self._distributed:
             self._pytorch_model = DistributedDataParallel(
@@ -109,6 +114,10 @@ class Trainer:
             keep_num_checkpoints=num_checkpoints
         )
         self._grad_norm = grad_norm
+        self._use_wandb = use_wandb
+        # Watch model for wandb only on master
+        if self._use_wandb and self._is_master:
+            wandb.watch(model)
 
     @property
     def cuda_device(self) -> int:
@@ -122,11 +131,8 @@ class Trainer:
         return self._distributed
 
     @ddp.on_batch_start
-    def _train_batch(self, batch: Batch, **extra_kwargs) -> Dict[str, Any]:
-        batch = {
-            prop: tensor.to(device=self._cuda_device, non_blocking=True)
-            for prop, tensor in batch.__dict__.items()
-        }
+    def _train_batch(self, batch: CollateBatch, **extra_kwargs) -> Dict[str, Any]:
+        batch = batch.to_device(device=self._cuda_device, non_blocking=True)
         output_dict = self._pytorch_model(**batch, **extra_kwargs).pop("loss_info")
         loss = output_dict.pop("batch_loss")
         loss.backward()
@@ -147,11 +153,8 @@ class Trainer:
         return metrics
 
     @ddp.on_batch_start
-    def _validate_batch(self, batch: Batch, **extra_kwargs) -> Dict[str, Any]:
-        batch = {
-            prop: tensor.to(device=self._cuda_device, non_blocking=True)
-            for prop, tensor in batch.__dict__.items()
-        }
+    def _validate_batch(self, batch: CollateBatch, **extra_kwargs) -> Dict[str, Any]:
+        batch = batch.to_device(device=self._cuda_device, non_blocking=True)
         output_dict = self._pytorch_model(**batch, **extra_kwargs).pop("loss_info")
         loss = output_dict.pop("batch_loss")
         metrics = self._model.get_metrics()
@@ -165,7 +168,7 @@ class Trainer:
         return metrics
 
     @ddp.on_epoch_end
-    def _run_epoch(self, dataloader_tqdm: Iterable[Batch], for_training: bool = True) -> float:
+    def _run_epoch(self, dataloader_tqdm: Iterable[CollateBatch], for_training: bool = True) -> float:
         num_batches = 0
         total_loss = 0
         batch_outputs = self._train_batch if for_training else self._validate_batch
@@ -175,14 +178,14 @@ class Trainer:
             num_batches += 1
             if done_early:
                 break
-            if self._master:
+            if self._is_master:
                 metrics["loss"] = total_loss / num_batches
                 description = description_from_metrics(metrics)
                 dataloader_tqdm.set_description(description, refresh=False)
         return total_loss / num_batches, done_early
 
     def _fit(self, dataloader: DataIterator, is_train: bool = True) -> Dict[str, Any]:
-        dataloader_tqdm = util.tqdm_dataloader(dataloader, is_master=self._master)
+        dataloader_tqdm = util.tqdm_dataloader(dataloader, is_master=self._is_master)
         epoch_loss = self._run_epoch(dataloader_tqdm, for_training=is_train)
         # Let all workers finish their epoch before computing
         # the final statistics for the epoch.
@@ -204,15 +207,15 @@ class Trainer:
             logger.info("Training")
             train_metrics = self._fit(train_dataloader)
             # Log metrics only on master
-            if self._master:
-                log_metrics(mode_str="Training", epoch=epoch, metrics=train_metrics)
+            if self._is_master:
+                log_metrics(mode_str="Training", epoch=epoch, metrics=train_metrics, log_to_wandb=self._use_wandb)
             # Validation
             logger.info("Validation")
             validation_metrics = self.evaluate(validation_dataloader, epoch=epoch)
             if self._metric_patience:
                 self._metric_patience(validation_metrics)
             # Save model state only on master
-            if self._master:
+            if self._is_master:
                 self._save_checkpoint(
                     validation_metrics,
                     is_best_so_far=self._metric_patience.improved if self._metric_patience else True,
@@ -246,6 +249,6 @@ class Trainer:
         self._pytorch_model.eval()
         metrics = self._fit(dataloader, is_train=False)
         # Log metrics only on master
-        if self._master:
-            log_metrics(mode_str=desc, epoch=epoch, metrics=metrics)
+        if self._is_master:
+            log_metrics(mode_str=desc, epoch=epoch, metrics=metrics, log_to_wandb=self._use_wandb)
         return metrics

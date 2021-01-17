@@ -4,9 +4,9 @@ import torch
 from overrides import overrides
 import torch.distributions as D
 from einops import repeat, rearrange
-from nonauto_lm.base import TorchModule
-from nonauto_lm.base import LatentSample
 from cached_property import cached_property
+from nonauto_lm.models.base import TorchModule
+from nonauto_lm.models.base import LatentSample
 from torch_nlp_utils.common import Registrable
 
 

@@ -1,13 +1,18 @@
-from typing import NamedTuple, Dict, Any
+from typing import NamedTuple, Dict, Callable
 import json
+import wandb
 import shutil
 import tarfile
 import tempfile
 from pathlib import Path
 from loguru import logger
-from copy import deepcopy
-from .base import NonAutoLmModel
+from functools import wraps
+import torch.distributed as dist
 from contextlib import contextmanager
+import nonauto_lm.training.ddp as ddp
+from torch_nlp_utils.common import Params
+# Modules
+from nonauto_lm.models.base import NonAutoLmModel
 
 
 CONFIG_NAME = "config.json"
@@ -19,7 +24,7 @@ class Archive(NamedTuple):
     """ An archive comprises a Model and its experimental config with metrics"""
 
     model: NonAutoLmModel
-    config: Dict[str, Any]
+    config: Params
     metrics: Dict[str, float]
 
 
@@ -49,6 +54,7 @@ def archive_model(
             f"weights file {weights_file} does not exist, unable to archive model."
         )
         return
+    # Check metrics
     metrics_file = weights / METRICS_NAME
     if not metrics_file.exists():
         logger.error(
@@ -100,13 +106,12 @@ def load_archive(
                 serialization_dir = tempdir
         weights_path = serialization_dir / WEIGHTS_NAME
         # Load config
-        with (serialization_dir / CONFIG_NAME).open("r", encoding="utf-8") as file:
-            config = json.load(file)
+        config = Params.from_file(str(serialization_dir / CONFIG_NAME))
         # Load metrics
         with (serialization_dir / METRICS_NAME).open("r", encoding="utf-8") as file:
             metrics = json.load(file)
         # Instantiate model. Use a duplicate of the config, as it will get consumed.
-        model_params = deepcopy(config)
+        model_params = config.duplicate()
         model_params["vocabulary"] = str(serialization_dir / "vocabulary")
         model = NonAutoLmModel.load(
             model_params,
@@ -137,3 +142,37 @@ def extracted_archive(resolved_archive_file, cleanup=True):
         if tempdir is not None and cleanup:
             logger.info(f"Removing temporary unarchived model dir at {tempdir}")
             shutil.rmtree(tempdir, ignore_errors=True)
+
+
+def configure_world(func: Callable) -> Callable:
+    """Decorator to configure Distributed Training world and wandb if needed for function."""
+
+    @wraps(func)
+    def wrapper(process_rank: int, config: Params, world_size: int = 1, **kwargs) -> None:
+        is_master = process_rank == 0
+        use_wandb = config.get("use_wandb", False)
+        # Setup world for Distributed Training
+        if world_size > 1:
+            ddp.setup_world(process_rank, world_size, backend=dist.Backend.NCCL)
+        # Run wandb in master process
+        # TODO: Add allennlp Params
+        if is_master and use_wandb:
+            wandb.init(config=config.as_flat_dict(), reinit=True, tags=config.pop("tags"))
+        # Run function
+        func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
+        if is_master:
+            serialization_dir = config["serialization_dir"]
+            # Construct archive in distributed training there
+            # because wandb hangs in distributed training mode
+            # and we need to finish it manually then.
+            archive_model(
+                serialization_dir=serialization_dir,
+                weights=serialization_dir / "best-model",
+            )
+            if use_wandb:
+                # Save archived model to wandb
+                wandb.save(str(serialization_dir / "model.tar.gz"))
+                wandb.finish()
+
+    wrapper.original = func
+    return wrapper
