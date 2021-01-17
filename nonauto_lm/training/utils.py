@@ -155,7 +155,6 @@ def configure_world(func: Callable) -> Callable:
         if world_size > 1:
             ddp.setup_world(process_rank, world_size, backend=dist.Backend.NCCL)
         # Run wandb in master process
-        # TODO: Add allennlp Params
         if is_master and use_wandb:
             wandb.init(config=config.as_flat_dict(), reinit=True, tags=config.pop("tags"))
         # Run function
