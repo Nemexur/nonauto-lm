@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "nonauto-lm"
+version = "0.1.0"
+description = ""
+authors = ["nemexur <alex.milogradsky@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "~3.7.3"
+torch = "1.7.0"
+loguru = "^0.5.3"
+tqdm = "^4.55.0"
+cleo = "^0.8.1"
+jsonnet = "^0.17.0"
+scikit-learn = "^0.24.0"
+overrides = "^3.1.0"
+cached-property = "^1.5.2"
+einops = "^0.3.0"
+torch-nlp-utils = {git = "https://github.com/Nemexur/torch-nlp-utils.git"}
+
+[tool.poetry.dev-dependencies]
+flake8 = "^3.8.4"
+ipython = "^7.19.0"
+jedi = "0.17.2"
+jupyterlab = "^3.0.0"
+ipykernel = "^5.4.2"
+black = "^20.8b1"
+
+[tool.black]
+line-length = 100
+target-version = ["py37"]
+include = '\.pyi?$'
+exclude = '''
+(
+      __pycache__
+    | \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | \.vscode
+    | _build
+    | buck-out
+    | build
+    | dist
+)
+'''
+
+[tool.poetry.scripts]
+nonauto-lm = 'nonauto_lm.cli:main'
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
