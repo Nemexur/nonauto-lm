@@ -47,8 +47,6 @@ class WikiTextDatasetReader(DatasetReader):
                 splitted_tokens = (
                     tokens.split()[: self._max_length] if self._max_length else tokens.split()
                 )
-                # masked_tokens = self.sample_masking(splitted_tokens)
-                # target = splitted_tokens
                 # Add eos token at the end
                 yield {
                     "tokens": splitted_tokens + [self._eos],

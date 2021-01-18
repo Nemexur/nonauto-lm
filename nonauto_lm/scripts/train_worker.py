@@ -86,7 +86,7 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
         dist.barrier()
     # Run training
     logger.debug("Run Trainer.")
-    trainer.train(
+    result = trainer.train(
         train_dataloader=train_dataloader,
         validation_dataloader=valid_dataloader,
     )
@@ -109,5 +109,6 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
         # Wait for all processes to get ready to start evaluation.
         if is_distributed:
             dist.barrier()
-        trainer.evaluate(test_dataloader, desc="Testing")
+        result = trainer.evaluate(test_dataloader, desc="Testing")
     logger.success("Finished!!!")
+    return result

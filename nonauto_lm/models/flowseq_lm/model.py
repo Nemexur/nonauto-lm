@@ -91,9 +91,10 @@ class FlowModel(NonAutoLmModel):
         output_dict = {"logits": logits, "probs": torch.softmax(logits, dim=-1)}
         output_dict["preds"] = torch.argmax(output_dict["probs"], dim=-1)
         # Get padding mask
-        weights = util.get_tokens_mask(target).float()
-        loss = self._loss(output_dict["logits"], target, weights=weights)
-        output_dict["loss"] = loss
+        if target is not None:
+            weights = util.get_tokens_mask(target).float()
+            loss = self._loss(output_dict["logits"], target, weights=weights)
+            output_dict["loss"] = loss
         return output_dict
 
     @overrides

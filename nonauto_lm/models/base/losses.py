@@ -140,7 +140,7 @@ class LabelSmoothingNLL(torch.nn.Module):
         log_probs_flat = torch.log_softmax(logits_flat, dim=-1)
         # targets_flat ~ (batch size * sequence length, 1)
         targets_flat = target.view(-1, 1).long()
-        if self._smoothing is not None and self._smoothing > 0.0:
+        if self._smoothing is not None and self._smoothing > 0.0 and self.training:
             num_classes = logits.size(-1)
             smoothing_value = self._smoothing / num_classes
             # Fill all the correct indices with 1 - smoothing value.

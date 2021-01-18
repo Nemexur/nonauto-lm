@@ -29,7 +29,8 @@ class Prior(TorchModule, Registrable):
         batch : `int`, required
             Number of samples to gather.
         lengths : `torch.LongTensor`, required
-            Lengths for each sample. If len(lengths) == 1 then it would be expanded to match size of samples.
+            Lengths for each sample.
+            If len(lengths) == 1 then it would be expanded to match size of samples.
         samples : `int`, optional (default = `1`)
             Number of additional samples for each sample.
 
@@ -114,9 +115,9 @@ class DefaultPrior(Prior):
         # self.base_dist.log_prob doesn't produce the same result.
         # It's really close but not the same.
         log_pi_part = math.log(2 * math.pi)
-        mu_square_part = z.mu**2
-        sigma_square_part = z.sigma**2
-        log_prob = -0.5 * (log_pi_part + mu_square_part + sigma_square_part)
+        square_mu_part = z.mu**2
+        square_sigma_part = z.sigma**2
+        log_prob = -0.5 * (log_pi_part + square_mu_part + square_sigma_part)
         log_prob = log_prob * mask.unsqueeze(-1)
         # Sum over all dimensions except batch
         return torch.einsum("b...->b", log_prob)

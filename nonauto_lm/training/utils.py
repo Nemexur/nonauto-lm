@@ -1,4 +1,5 @@
 from typing import NamedTuple, Dict, Callable
+import os
 import json
 import wandb
 import shutil
@@ -156,9 +157,14 @@ def configure_world(func: Callable) -> Callable:
             ddp.setup_world(process_rank, world_size, backend=dist.Backend.NCCL)
         # Run wandb in master process
         if is_master and use_wandb:
-            wandb.init(config=config.as_flat_dict(), reinit=True, tags=config.pop("tags"))
+            wandb.init(
+                project=os.getenv("WANDB_PROJECT_NAME"),
+                config=config.as_flat_dict(),
+                reinit=True,
+                tags=config.pop("tags"),
+            )
         # Run function
-        func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
+        result = func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
         if is_master:
             serialization_dir = config["serialization_dir"]
             # Construct archive in distributed training there
@@ -171,7 +177,10 @@ def configure_world(func: Callable) -> Callable:
             if use_wandb:
                 # Save archived model to wandb
                 wandb.save(str(serialization_dir / "model.tar.gz"))
+                # Update summary manually with best result
+                wandb.run.summary.update(result)
                 wandb.finish()
+        return result
 
     wrapper.original = func
     return wrapper

@@ -71,7 +71,7 @@ class TrainCommand(Command):
         serialization_dir = Path(self.option("serialization-dir"))
         if serialization_dir.exists():
             confirmed = self.confirm(
-                f"Serialization directory at path: {serialization_dir} already exists. Delete it?",
+                f"Serialization directory at path `{serialization_dir}` already exists. Delete it?",
                 default=True,
             )
             if confirmed:

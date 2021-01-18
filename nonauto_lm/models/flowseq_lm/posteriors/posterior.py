@@ -17,14 +17,14 @@ class Posterior(TorchModule, Registrable):
         self._features = features
         self._mu_net = torch.nn.Linear(input_size, features)
         # Ensure that sigma > 0
-        # Also we might expontiate result of self._sigma_net
+        # Also we might exponentiate result of self._sigma_net
         # but it would involve mess with torch.exp
         self._sigma_net = torch.nn.Sequential(
             torch.nn.Linear(input_size, features),
             torch.nn.Softplus(),
             torch.nn.Hardtanh(min_val=1e-4, max_val=5.)
         )
-        # Computed mu and sigma
+        # Placeholders for computed mu and sigma
         self._mu = None
         self._sigma = None
         self.apply(self.init_parameters)
@@ -165,8 +165,8 @@ class Posterior(TorchModule, Registrable):
         # We need to compute log_prob manually as it depends on mu and sigma
         # computed over batch
         log_pi_part = math.log(2 * math.pi)
-        sigma_log_part = 2 * self._sigma.log()
-        log_prob = -0.5 * (log_pi_part + 1 + sigma_log_part)
+        log_sigma_part = 2 * self._sigma.log()
+        log_prob = -0.5 * (log_pi_part + 1 + log_sigma_part)
         # Different version.
         # It's close to the one above (from Kingma VAE Paper) but not the same.
         # log_prob = (
