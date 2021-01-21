@@ -1,11 +1,13 @@
-from typing import Callable, cast, Type, T
+from typing import Callable, cast, Type, T, Tuple, Any
 import torch
+from time import sleep
 from loguru import logger
 from functools import wraps
 from argparse import Namespace
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.distributed import Backend
+from multiprocessing import Process, Queue
 
 
 def spawn(process: Callable, args: Namespace, world_size: int) -> None:
@@ -95,3 +97,37 @@ def setup_world(
 def dist_cleanup() -> None:
     # Clean processes
     dist.destroy_process_group()
+
+
+# TODO: Work in progres
+# It's not part of the work, just for fun :)))
+# Want to implement distributed training with spawn and fork methods (Hogwild)
+# Написать абсолютно другую функцию для тренировки модели, она будет принимать думаю Trainer
+# и уже работать именно на нём. Смотри pytorch lightning и best practices with PyTorch multiprocessing.
+class DistributedTraining:
+    def __init__(
+        self,
+        worker: Callable,
+        # TODO: Make accelerators registrebale
+        accelerator: str = "ddp_spawn",
+        world_size: int = 1,
+    ) -> None:
+        self._worker = worker
+        self._accelerator = None  # TODO: Pick one
+        self._world_size = world_size
+
+    def run_ddp(self, args: Tuple[Any]) -> None:
+        self._accelerator(process=self._worker, args=args, world_size=self._world_size)
+
+    def _ddp_spawn(self) -> None:
+        pass
+
+    def _ddp(self, args: Tuple[Any]) -> None:
+        _mp = mp.get_context("spawn")
+        proceses = []
+        for rank in range(self._world_size):
+            # TODO: Probably send instantiated model to Process with vocab
+            process = _mp.Process(target=self._worker, args=(rank, args, self._world_size), daemon=True)
+            # starting all processes at once can cause issues
+            # with dataloaders delay between 1-10 seconds
+            # sleep(delay)

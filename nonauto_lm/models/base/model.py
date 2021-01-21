@@ -8,8 +8,8 @@ from .losses import LabelSmoothingNLL
 from .torch_module import TorchModule
 from torch_nlp_utils.data import Vocabulary
 from nonauto_lm.nn.kl_scheduler import KLScheduler
-from nonauto_lm.training.metrics import Perplexity
 from torch_nlp_utils.common import Registrable, Params
+from nonauto_lm.training.metrics import Perplexity, Average
 
 
 class LatentSample(NamedTuple):
@@ -74,12 +74,16 @@ class NonAutoLmModel(TorchModule, Registrable):
         super().__init__()
         self._vocab = vocab
         self._nsamples_posterior = num_samples_from_posterior
-        self._perplexity = Perplexity()
         self._kl_scheduler = KLScheduler(
             no_kl_steps=no_kl_steps, kl_annealing_steps=kl_annealing_steps
         )
         # Loss
         self._loss = LabelSmoothingNLL(label_smoothing, size_average=False)
+        # Metrics
+        self._perplexity = Perplexity()
+        self._avgs = {
+            metric: Average() for metric in ["avg_kl_weight", "avg_kl_loss", "avg_recon_error"]
+        }
 
     def forward(
         self,
@@ -94,7 +98,9 @@ class NonAutoLmModel(TorchModule, Registrable):
         src_encoded, src_mask = self.encode(src_tokens)
         # z ~ (batch size * samples, seq length, hidden size)
         # posterior_log_prob ~ (batch size * samples)
-        latent, posterior_log_prob = self._sample_from_posterior(src_encoded, mask=src_mask, random=True)
+        latent, posterior_log_prob = self._sample_from_posterior(
+            src_encoded, mask=src_mask, random=True
+        )
         # src_mask ~ (batch * samples, seq length)
         src_mask = repeat(
             src_mask, "batch seq -> batch samples seq", samples=self._nsamples_posterior
@@ -132,6 +138,9 @@ class NonAutoLmModel(TorchModule, Registrable):
         }
         # Update metrics
         self._perplexity(recon_error)
+        self._avgs["avg_kl_weight"](self._kl_scheduler.kl_weight)
+        self._avgs["avg_kl_loss"](kl_loss)
+        self._avgs["avg_recon_error"](recon_error)
         return output_dict
 
     def _get_prior_log_prob(self, z: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -258,6 +267,7 @@ class NonAutoLmModel(TorchModule, Registrable):
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         return {
             "ppl": self._perplexity.get_metric(reset),
+            **{name: metric.get_metric(reset) for name, metric in self._avgs.items()},
         }
 
     def make_output_human_readable(
@@ -307,7 +317,7 @@ class NonAutoLmModel(TorchModule, Registrable):
         vocab: Vocabulary = Vocabulary.from_files(params.get("vocabulary"))
         device = util.int_to_device(device)
         # Load weights if needed
-        if isinstance(weights, str) and weights.exists():
+        if isinstance(weights, Path) and weights.exists():
             weights = torch.load(weights, map_location=device)
             weights = weights["model"] if not isinstance(weights, OrderedDict) else weights
         # Construct model

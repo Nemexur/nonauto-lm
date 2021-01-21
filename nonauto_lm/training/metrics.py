@@ -1,3 +1,4 @@
+import math
 import torch
 from overrides import overrides
 import torch.distributed as dist
@@ -5,16 +6,8 @@ import nonauto_lm.nn.utils as util
 from torch_nlp_utils.metrics import Metric
 
 
-class Perplexity(Metric):
-    """
-    Perplexity is a common metric used for evaluating how well a language model
-    predicts a sample.
-
-    Notes
-    -----
-    Assumes negative log likelihood loss of each batch (base e). Provides the
-    average perplexity of the batches.
-    """
+class Average(Metric):
+    """Simple metric to average results over passed tensor values."""
 
     def __init__(self) -> None:
         self._total_value = 0.0
@@ -36,17 +29,35 @@ class Perplexity(Metric):
         self._total_value += _total_value
 
     @overrides
-    def get_metric(self, reset: bool = False) -> float:
-        """The accumulated perplexity."""
-        average_loss = self._total_value / self._count if self._count > 0 else 0
-        if average_loss == 0:
-            return 0.0
+    def get_metric(self, reset: bool = False):
+        """Average of accumulated values."""
+        average_value = self._total_value / self._count if self._count > 0 else 0.0
         if reset:
             self.reset()
-        # Exponentiate the loss to compute perplexity
-        return float(torch.exp(average_loss))
+        return float(average_value)
 
     @overrides
-    def reset(self) -> None:
+    def reset(self):
         self._total_value = 0.0
         self._count = 0
+
+
+class Perplexity(Average):
+    """
+    Perplexity is a common metric used for evaluating how well a language model
+    predicts a sample.
+
+    Notes
+    -----
+    Assumes negative log likelihood loss of each batch (base e). Provides the
+    average perplexity of the batches.
+    """
+
+    @overrides
+    def get_metric(self, reset: bool = False) -> float:
+        """The accumulated perplexity."""
+        average_loss = super().get_metric(reset)
+        if average_loss == 0:
+            return 0.0
+        # Exponentiate the loss to compute perplexity
+        return math.exp(average_loss)

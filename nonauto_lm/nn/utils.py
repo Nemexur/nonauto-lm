@@ -10,14 +10,14 @@ def dist_available() -> bool:
 
 
 def get_tokens_mask(x: torch.Tensor) -> torch.Tensor:
-    """Gat mask for tokens on padding."""
+    """Get mask for padding tokens."""
     return x.ne(0).long()
 
 
 def tqdm_dataloader(dataloader: DataIterator, is_master: bool) -> Iterable[Batch]:
     """
     Having multiple tqdm bars in case of distributed training will be a mess.
-    Hence only the master's progress is shown
+    Hence only the master's progress is shown.
     """
     return tqdm(iter(dataloader), mininterval=0.2) if is_master else iter(dataloader)
 

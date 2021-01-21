@@ -17,7 +17,7 @@ from nonauto_lm.models.base import NonAutoLmModel
 
 
 CONFIG_NAME = "config.json"
-WEIGHTS_NAME = "weights.th"
+WEIGHTS_NAME = "weights.pt"
 METRICS_NAME = "metrics.json"
 
 
@@ -116,7 +116,7 @@ def load_archive(
         model_params["vocabulary"] = str(serialization_dir / "vocabulary")
         model = NonAutoLmModel.load(
             model_params,
-            weights=str(weights_path),
+            weights=weights_path,
             device=cuda_device,
         )
     finally:
@@ -166,7 +166,7 @@ def configure_world(func: Callable) -> Callable:
         # Run function
         result = func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
         if is_master:
-            serialization_dir = config["serialization_dir"]
+            serialization_dir = Path(config["serialization_dir"])
             # Construct archive in distributed training there
             # because wandb hangs in distributed training mode
             # and we need to finish it manually then.
@@ -177,8 +177,6 @@ def configure_world(func: Callable) -> Callable:
             if use_wandb:
                 # Save archived model to wandb
                 wandb.save(str(serialization_dir / "model.tar.gz"))
-                # Update summary manually with best result
-                wandb.run.summary.update(result)
                 wandb.finish()
         return result
 

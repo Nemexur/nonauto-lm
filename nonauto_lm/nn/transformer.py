@@ -91,8 +91,10 @@ class MultiHeadAttention(torch.nn.Module):
         # key ~ (batch size, num heads, seq length, attn size)
         # value ~ (batch size, num heads, seq length, attn size)
         # mask ~ (batch size, seq length)
+        # Generate new mask if None.
+        seq_length = query.size(2)
+        mask = query.new_ones(query.size(0), seq_length) if mask is None else mask
         if self._mask_tril:
-            seq_length = query.size(2)
             # mask_tril ~ (seq length, seq length)
             mask_tril = torch.tril(query.new_ones(seq_length, seq_length))
             # Multiply tril and mask to ignore padding
@@ -100,11 +102,10 @@ class MultiHeadAttention(torch.nn.Module):
             mask = torch.einsum("bs,ls->bls", mask, mask_tril)
         # query @ key ~ (batch size, num heads, seq length, seq length)
         scores = torch.einsum("bhqd,bhkd->bhqk", query, key) / math.sqrt(self._attn_size)
-        if mask is not None:
-            # Add dimensions for masked_fill to work
-            while mask.dim() < scores.dim():
-                mask = mask.unsqueeze(1)
-            scores = scores.masked_fill(mask.eq(0), self._attention_fill_value)
+        # Add dimensions for masked_fill to work
+        while mask.dim() < scores.dim():
+            mask = mask.unsqueeze(1)
+        scores = scores.masked_fill(mask.eq(0), self._attention_fill_value)
         probs = torch.softmax(scores, dim=-1)
         probs = self._dropout(probs)
         # probs @ value ~ (batch size, num heads, seq length, attn size)
