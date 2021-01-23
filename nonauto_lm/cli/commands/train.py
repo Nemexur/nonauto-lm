@@ -85,6 +85,8 @@ class TrainCommand(Command):
                     "Probably you know what you are doing.",
                     style="warning",
                 )
+        else:
+            serialization_dir.mkdir(exist_ok=False)
         # Log config to console and save
         logger.info(
             "Config: {}".format(json.dumps(config.as_flat_dict(), indent=2, ensure_ascii=False))
