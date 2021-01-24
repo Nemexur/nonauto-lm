@@ -156,6 +156,7 @@ def configure_world(func: Callable) -> Callable:
         if world_size > 1:
             ddp.setup_world(process_rank, world_size, backend=dist.Backend.NCCL)
         # Run wandb in master process
+        # TODO: Think about config unflat for wandb sweep to work for hyperparameters optimization.
         if is_master and use_wandb:
             wandb.init(
                 project=os.getenv("WANDB_PROJECT_NAME"),

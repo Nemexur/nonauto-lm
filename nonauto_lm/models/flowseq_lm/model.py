@@ -3,6 +3,7 @@ import torch
 from overrides import overrides
 import nonauto_lm.nn.utils as util
 from torch_nlp_utils.data import Vocabulary
+from nonauto_lm.nn.kl_scheduler import IKLScheduler
 from nonauto_lm.models.base import NonAutoLmModel, PriorSample, PosteriorSample, Embedder, LatentSample
 # Modules
 from .priors import Prior
@@ -16,21 +17,19 @@ class FlowModel(NonAutoLmModel):
     def __init__(
         self,
         vocab: Vocabulary,
+        kl_scheduler: IKLScheduler,
         embedder: Embedder,
         encoder: Encoder,
         decoder: Decoder,
         posterior: Posterior,
         prior: Prior,
         num_samples_from_posterior: int = 1,
-        no_kl_steps: int = 2000,
-        kl_annealing_steps: int = 10000,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__(
             vocab=vocab,
+            kl_scheduler=kl_scheduler,
             num_samples_from_posterior=num_samples_from_posterior,
-            no_kl_steps=no_kl_steps,
-            kl_annealing_steps=kl_annealing_steps,
             label_smoothing=label_smoothing,
         )
         self._embedder = embedder
@@ -162,6 +161,7 @@ class FlowModel(NonAutoLmModel):
 
     @classmethod
     def from_params(cls: Type[T], vocab: Vocabulary, **params) -> T:
+        kl_scheduler = IKLScheduler.from_params(**params.pop("kl_scheduler"))
         embedder = Embedder.from_params(vocab=vocab, **params.pop("embedder"))
         encoder = Encoder.from_params(**params.pop("encoder"))
         decoder = Decoder.from_params(**params.pop("decoder"))
@@ -169,6 +169,7 @@ class FlowModel(NonAutoLmModel):
         prior = Prior.from_params(**params.pop("prior"))
         return cls(
             vocab=vocab,
+            kl_scheduler=kl_scheduler,
             embedder=embedder,
             encoder=encoder,
             decoder=decoder,

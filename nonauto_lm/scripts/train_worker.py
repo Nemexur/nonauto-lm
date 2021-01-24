@@ -7,10 +7,8 @@ from nonauto_lm.training.utils import configure_world
 from torch_nlp_utils.data import DatasetReader, DataIterator, Vocabulary, Namespace, CollateBatch
 # Modules
 import nonauto_lm.nn.utils as util
-from nonauto_lm.nn.optimizer import Optimizer
-from nonauto_lm.training.trainer import Trainer
+from nonauto_lm.training.trainer import ITrainer
 from nonauto_lm.models.base import NonAutoLmModel
-from nonauto_lm.nn.lr_scheduler import LRScheduler
 
 
 @configure_world
@@ -65,14 +63,10 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
     logger.debug("Instantiating Modules from config.")
     device = util.int_to_device(config["cuda_devices"][process_rank])
     model = NonAutoLmModel.from_params(vocab=vocab, **config.pop("model")).to(device)
-    optimizer = Optimizer.from_params(params=model.parameters(), **config.pop("optimizer"))
-    scheduler = LRScheduler.from_params(optimizer=optimizer, **config["trainer"].pop("scheduler"))
     # Instantiate Trainer
     logger.debug("Instantiating Trainer.")
-    trainer = Trainer(
+    trainer = ITrainer.from_params(
         model=model,
-        optimizer=optimizer,
-        scheduler=scheduler,
         distributed=device != torch.device("cpu") and world_size != 1,
         cuda_device=device,
         local_rank=process_rank,

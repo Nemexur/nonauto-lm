@@ -7,7 +7,7 @@ from collections import OrderedDict
 from .losses import LabelSmoothingNLL
 from .torch_module import TorchModule
 from torch_nlp_utils.data import Vocabulary
-from nonauto_lm.nn.kl_scheduler import KLScheduler
+from nonauto_lm.nn.kl_scheduler import IKLScheduler
 from torch_nlp_utils.common import Registrable, Params
 from nonauto_lm.training.metrics import Perplexity, Average
 
@@ -66,17 +66,14 @@ class NonAutoLmModel(TorchModule, Registrable):
     def __init__(
         self,
         vocab: Vocabulary,
+        kl_scheduler: IKLScheduler,
         num_samples_from_posterior: int = 1,
-        no_kl_steps: int = 2000,
-        kl_annealing_steps: int = 10000,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__()
         self._vocab = vocab
         self._nsamples_posterior = num_samples_from_posterior
-        self._kl_scheduler = KLScheduler(
-            no_kl_steps=no_kl_steps, kl_annealing_steps=kl_annealing_steps
-        )
+        self._kl_scheduler = kl_scheduler
         # Loss
         self._loss = LabelSmoothingNLL(label_smoothing, size_average=False)
         # Metrics
