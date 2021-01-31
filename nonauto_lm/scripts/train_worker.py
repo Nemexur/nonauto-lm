@@ -7,7 +7,7 @@ from nonauto_lm.training.utils import configure_world
 from torch_nlp_utils.data import DatasetReader, DataIterator, Vocabulary, Namespace, CollateBatch
 # Modules
 import nonauto_lm.nn.utils as util
-from nonauto_lm.training.trainer import ITrainer
+from nonauto_lm.training import Trainer
 from nonauto_lm.models.base import NonAutoLmModel
 
 
@@ -65,7 +65,7 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
     model = NonAutoLmModel.from_params(vocab=vocab, **config.pop("model")).to(device)
     # Instantiate Trainer
     logger.debug("Instantiating Trainer.")
-    trainer = ITrainer.from_params(
+    trainer = Trainer.from_params(
         model=model,
         distributed=device != torch.device("cpu") and world_size != 1,
         cuda_device=device,
@@ -75,7 +75,7 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
         use_wandb=config.get("use_wandb", False),
         **config.pop("trainer"),
     )
-    # Let all setup get ready for all workers.
+    # Let setup get ready for all workers.
     if is_distributed:
         dist.barrier()
     # Run training

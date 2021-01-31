@@ -42,3 +42,23 @@ def unwrap_to_tensors(*tensors: torch.Tensor) -> Iterable[torch.Tensor]:
     the CPU.
     """
     return (x.detach().cpu() if isinstance(x, torch.Tensor) else x for x in tensors)
+
+
+def logsumexp(tensor: torch.Tensor, dim: int = -1, keepdim: bool = False) -> torch.Tensor:
+    """
+    A numerically stable computation of logsumexp.
+    This is mathematically equivalent to `tensor.exp().sum(dim, keep=keepdim).log()`.
+    This function is typically used for summing log probabilities.
+
+    Parameters
+    ----------
+    tensor : `torch.FloatTensor`, required.
+        A tensor of arbitrary size.
+    dim : `int`, optional (default = `-1`)
+        The dimension of the tensor to apply the logsumexp to.
+    keepdim: `bool`, optional (default = `False`)
+        Whether to retain a dimension of size one at the dimension we reduce over.
+    """
+    max_score, _ = tensor.max(dim, keepdim=keepdim)
+    stable_vec = tensor - max_score if keepdim else tensor - max_score.unsqueeze(dim)
+    return max_score + stable_vec.exp().sum(dim, keepdim=keepdim).log()

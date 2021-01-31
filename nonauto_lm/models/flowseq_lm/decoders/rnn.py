@@ -15,8 +15,9 @@ class RecurrentDecoder(Decoder):
         hidden_sizes: List[int] = None,
         ff_activation: str = "elu",
         dropout: float = 0.0,
+        skip_z: bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(skip_z)
         self._core = core
         if hidden_sizes is None:
             self._feedforward = lambda x: x
@@ -30,6 +31,8 @@ class RecurrentDecoder(Decoder):
                 dropout=dropout,
             )
             self._output_size = self._feedforward.get_output_size()
+        if skip_z:
+            self._output_size += self._core.get_input_size()
         if dropout > 0.0:
             self._dropout = torch.nn.Dropout(dropout)
         else:
@@ -42,7 +45,7 @@ class RecurrentDecoder(Decoder):
         return self._output_size
 
     @overrides
-    def forward(self, z: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def decoder(self, z: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         z = self._dropout(z)
         core_output = self._core(z, mask)
         return self._feedforward(core_output)

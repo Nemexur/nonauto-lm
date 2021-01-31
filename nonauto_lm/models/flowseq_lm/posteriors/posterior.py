@@ -3,6 +3,7 @@ import math
 import torch
 from overrides import overrides
 import torch.distributions as D
+import nonauto_lm.nn.utils as util
 from einops import repeat, rearrange
 from cached_property import cached_property
 from nonauto_lm.models.base import TorchModule
@@ -27,12 +28,6 @@ class Posterior(TorchModule, Registrable):
         # Placeholders for computed mu and sigma
         self._mu = None
         self._sigma = None
-        self.apply(self.init_parameters)
-
-    def init_parameters(self, module: torch.nn.Module):
-        if isinstance(module, torch.nn.Linear):
-            torch.nn.init.xavier_uniform_(module.weight)
-            module.bias.data.fill_(0.01)
 
     @cached_property
     def base_dist(self):
@@ -135,8 +130,8 @@ class Posterior(TorchModule, Registrable):
         z = self._mu.unsqueeze(1) + sample * self._sigma.unsqueeze(1)
         # mask ~ (batch size * samples, seq length)
         mask = repeat(
-            mask, "batch seq -> batch samples seq", samples=samples
-        ).view(-1, mask.size(1))
+            mask, "batch seq -> (batch samples) seq", samples=samples
+        )
         # z ~ (batch size * samples, seq length, hidden size)
         # sample ~ (batch size * samples, seq length, hidden size)
         z = rearrange(
@@ -181,6 +176,58 @@ class Posterior(TorchModule, Registrable):
         # Sum over all dimensions except batch
         return torch.einsum("b...->b", log_prob)
 
+    def calc_mutual_info(
+        self, z: torch.Tensor, log_prob: torch.Tensor, mask: torch.Tensor, samples: int = 1
+    ) -> torch.Tensor:
+        """
+        Approximate the mutual information between `input` and `sampled latent codes`:
+
+        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_q(z)[log q(z)]`
+
+        Parameters
+        ----------
+        latent : `LatentSample`, required
+            Latent sample from Posterior forward.
+        log_prob : `torch.Tensor`, required
+            Log probability of sampled latent codes.
+        mask : `torch.Tensor`, required
+            Mask of padding for sampled latent codes.
+        samples : `int`, optional (default = `1`)
+            Number of samples from posterior.
+        """
+        # latent.z ~ (batch size * samples, seq length, hidden size)
+        # latent.mu ~ (batch size, seq length, hidden size)
+        # latent.sigma ~ (batch size, seq length, hidden size)
+        mu = repeat(
+            self._mu, "batch seq size -> (batch samples) seq size", samples=samples
+        )
+        sigma = repeat(
+            self._sigma, "batch seq size -> (batch samples) seq size", samples=samples
+        )
+        # Compare each latent code with other latent codes. It is needed based on formula
+        # of E_q(z)[log g(z)] where q(z) = E_p(x)[q(z|x)]
+        # Latent.z.unsqueeze(1) means sampling only one x from p(x) like MC sampling with 1
+        # Then we do not need prior lob probability part as they are equal in both.
+        # Probably because of that we can get mutual information < 0 as an estimation is biased.
+        # log_density ~ (batch size * samples, batch size * samples, seq length, hidden size)
+        log_density = (
+            -0.5 * (
+                (z.unsqueeze(1) - mu).pow(2)
+                * sigma.pow(2).reciprocal()
+                + 2 * sigma.log()
+                + math.log(2 * math.pi)
+            )
+        )
+        # Remove padding
+        log_density = torch.einsum("bnsh,bs->bnsh", log_density, mask)
+        # log_density ~ (batch size * samples, batch size * samples)
+        log_density = torch.einsum("bn...->bn", log_density)
+        # log_qz ~ (batch size * samples)
+        # log q(z): aggregate posterior
+        # logsumexp to compute log sum[g(z|x)]
+        log_qz = util.logsumexp(log_density, dim=-1) - math.log(mu.size(0))
+        return (log_prob - log_qz).mean()
+
 
 @Posterior.register("default")
 class DefaultPosterior(Posterior):
@@ -203,7 +250,7 @@ class DefaultPosterior(Posterior):
         # src_mask ~ (batch size, seq length)
         # z ~ (batch size * samples, seq length, hidden size)
         # mask ~ (batch size * samples, seq length)
-        z, mask = self.sample(encoded, mask, samples=samples, random=True)
+        z, mask = self.sample(encoded, mask, samples=samples, random=random)
         # log_prob ~ (batch size * samples)
         log_prob = self.log_probability(z, mask)
         return LatentSample(z, self._mu, self._sigma), log_prob

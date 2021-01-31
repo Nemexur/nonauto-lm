@@ -105,12 +105,12 @@ class DefaultPrior(Prior):
         )
         # mask ~ (batch size * samples, max length)
         mask = repeat(
-            mask, "batch seq -> batch samples seq", samples=samples
-        ).view(-1, mask.size(1))
+            mask, "batch seq -> (batch samples) seq", samples=samples
+        )
         return epsilon, mask
 
     @overrides
-    def log_probability(self, z: LatentSample, mask: torch.Tensor) -> torch.Tensor:
+    def log_probability(self, z: LatentSample, mask: torch.Tensor = None) -> torch.Tensor:
         # For now I don't understand the reason but
         # self.base_dist.log_prob doesn't produce the same result.
         # It's really close but not the same.
@@ -118,6 +118,7 @@ class DefaultPrior(Prior):
         square_mu_part = z.mu**2
         square_sigma_part = z.sigma**2
         log_prob = -0.5 * (log_pi_part + square_mu_part + square_sigma_part)
-        log_prob = log_prob * mask.unsqueeze(-1)
+        if mask is not None:
+            log_prob = log_prob * mask.unsqueeze(-1)
         # Sum over all dimensions except batch
         return torch.einsum("b...->b", log_prob)

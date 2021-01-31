@@ -1,4 +1,4 @@
-from typing import NamedTuple, Dict, Callable
+from typing import NamedTuple, Dict, Callable, Union
 import os
 import json
 import wandb
@@ -7,6 +7,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 from loguru import logger
+from copy import deepcopy
 from functools import wraps
 import torch.distributed as dist
 from contextlib import contextmanager
@@ -183,3 +184,53 @@ def configure_world(func: Callable) -> Callable:
 
     wrapper.original = func
     return wrapper
+
+
+def description_from_metrics(metrics: Dict[str, float]) -> str:
+    # Copy dict for safety
+    metrics = deepcopy(metrics)
+    # Configure loss first
+    loss = f"loss: {metrics.pop('loss'):.4f}, "
+    return (
+        loss
+        + ", ".join(
+            [
+                f"{name}: {value:.4f}"
+                for name, value in metrics.items()
+            ]
+        )
+        + " ||"
+    )
+
+
+def log_metrics(
+    mode_str: str,
+    metrics: Dict[str, float],
+    info: Dict[str, Union[float, int, str]] = None,
+    log_to_wandb: bool = False,
+) -> None:
+    """
+    Pretty log metrics and sort them by length and alphabetic order.
+
+    Parameters
+    ----------
+    mode_str : `str`, required
+        Mode string. Usually train or validation.
+    metrics : `Dict[str, float]`, required
+        Dictionary of metrics.
+    info : `Dict[str, Union[float, int, str]]`, optional (default = `None`)
+        Info to additionally log after and epoch.
+    log_to_wandb: `bool`, optional (default = `False`)
+        Whether to log to Weights & Biases or not.
+    """
+    logger.info(
+        f"{mode_str}: info -- {', '.join([f'{k}: {v}'.lower() for k, v in info.items()])}"
+        if info is not None else f"{mode_str}"
+    )
+    max_length = max(len(x) for x in metrics)
+    # Sort by length to make it prettier
+    for metric in sorted(metrics, key=lambda x: (len(x), x)):
+        metric_value = metrics.get(metric)
+        logger.info(f"{metric.ljust(max_length)} | {metric_value:.4f}")
+    if log_to_wandb:
+        wandb.log({f"{mode_str.lower()}/{k}": v for k, v in metrics.items()})

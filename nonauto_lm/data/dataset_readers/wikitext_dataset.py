@@ -17,6 +17,12 @@ class WikiTextDatasetReader(DatasetReader):
         Max length of sequence. If None length is not clipped.
     remove_sentencepiece_prefix : `bool`, optional (default = `True`)
         Whether to remove sentencepiece prefix for tokens or not.
+    max_prediction_per_seq : `int`, optional (default = `13`)
+        Maximum number of masks in sequence.
+    masked_lm_prob : `float`, optional (default = `0.15`)
+        How much tokens to mask in sequence.
+    sample_masking: `bool`, optional (default = `False`)
+        Whether to perform tokens masking or not.
     """
 
     def __init__(
@@ -25,14 +31,17 @@ class WikiTextDatasetReader(DatasetReader):
         remove_sentencepiece_prefix: bool = False,
         max_predictions_per_seq: int = 13,
         masked_lm_prob: float = 0.15,
+        sample_masking: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        self._sos = "<sos>"
         self._eos = "<eos>"
         self._max_length = max_length
         self._remove_sentencepiece_prefix = remove_sentencepiece_prefix
         self._max_predictions_per_seq = max_predictions_per_seq
         self._masked_lm_prob = masked_lm_prob
+        self._sample_masking = sample_masking
         self._rng = random.Random(13)
 
     def _read(self, file_path: str) -> Iterable[Dict[str, Any]]:
@@ -42,18 +51,25 @@ class WikiTextDatasetReader(DatasetReader):
                 if self._remove_sentencepiece_prefix:
                     tokens = re.sub(r"\▁", " ", tokens, flags=re.I)
                     tokens = re.sub(r"\s+", " ", tokens, flags=re.I).strip()
+                # Remove special symbols
+                tokens = re.sub(r"[^a-zA-Z0-9\<\>\s]", " ", tokens, flags=re.I)
+                # Remove extra spaces
+                tokens = re.sub(r"\s+", " ", tokens, flags=re.I).strip()
                 # Tokens equals target
                 # (tokens would come through some noise in posterior)
                 splitted_tokens = (
                     tokens.split()[: self._max_length] if self._max_length else tokens.split()
                 )
-                # Add eos token at the end
+                if self._sample_masking:
+                    source_tokens = self.sample_masking(splitted_tokens)
+                else:
+                    source_tokens = splitted_tokens
                 yield {
-                    "tokens": splitted_tokens + [self._eos],
-                    "target": splitted_tokens + [self._eos],
+                    "tokens": [self._sos] + source_tokens + [self._eos],
+                    "target": [self._sos] + splitted_tokens + [self._eos],
                 }
 
-    def sample_masking(self, tokens: List[str]) -> str:
+    def sample_masking(self, tokens: List[str]) -> List[str]:
         """
         Sampling masking for tokens.
 
@@ -64,8 +80,8 @@ class WikiTextDatasetReader(DatasetReader):
 
         Returns
         -------
-        `str`
-            Masked sentence.
+        `List[str]`
+            Masked sequence.
         """
         num_to_predict = min(
             self._max_predictions_per_seq, max(1, int(round(len(tokens) * self._masked_lm_prob)))
@@ -73,7 +89,11 @@ class WikiTextDatasetReader(DatasetReader):
         # Construct candidates and output sequence
         num_changes = 0
         output_tokens = tokens[:]
-        cand_indices = [idx for idx in range(len(tokens))]
+        cand_indices = [
+            idx for token, idx in zip(tokens, range(len(tokens)))
+            # Don't mask <unk> and numbers
+            if token != "<unk>" and re.match(r"\d+", token) is None
+        ]
         # Shuffle
         self._rng.shuffle(cand_indices)
         # Sample possible masking for valid words
@@ -82,7 +102,7 @@ class WikiTextDatasetReader(DatasetReader):
                 break
             output_tokens[cand_idx] = self._pick_masking(token)
             num_changes += 1
-        return " ".join(output_tokens)
+        return output_tokens
 
     def _pick_masking(self, token: str) -> str:
         # Pick [MASK] 80% of the time

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Union, Type, T, NamedTuple
+from typing import List, Tuple, Dict, Union, Type, T, NamedTuple, Iterator
 import torch
 from pathlib import Path
 from einops import repeat
@@ -7,7 +7,7 @@ from collections import OrderedDict
 from .losses import LabelSmoothingNLL
 from .torch_module import TorchModule
 from torch_nlp_utils.data import Vocabulary
-from nonauto_lm.nn.kl_scheduler import IKLScheduler
+from nonauto_lm.nn.kl_scheduler import KLScheduler
 from torch_nlp_utils.common import Registrable, Params
 from nonauto_lm.training.metrics import Perplexity, Average
 
@@ -61,31 +61,38 @@ class NonAutoLmModel(TorchModule, Registrable):
         Source tokens for model.
     tgt_tokens : `torch.Tensor`, required
         Target tokens for model.
+    manual_kl_step: `bool`, optional (default = `False`)
+        Whether to step KL Scheduler manually or not.
     """
 
     def __init__(
         self,
         vocab: Vocabulary,
-        kl_scheduler: IKLScheduler,
+        kl_scheduler: KLScheduler,
         num_samples_from_posterior: int = 1,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__()
         self._vocab = vocab
-        self._nsamples_posterior = num_samples_from_posterior
+        self.nsamples_posterior = num_samples_from_posterior
         self._kl_scheduler = kl_scheduler
         # Loss
         self._loss = LabelSmoothingNLL(label_smoothing, size_average=False)
         # Metrics
         self._perplexity = Perplexity()
         self._avgs = {
-            metric: Average() for metric in ["avg_kl_weight", "avg_kl_loss", "avg_recon_error"]
+            metric: Average() for metric in ["avg-kl-weight", "avg-kl", "avg-nll"]
         }
+
+    @property
+    def is_kl_used(self) -> bool:
+        return self._kl_scheduler.kl_weight != 0
 
     def forward(
         self,
         src_tokens: torch.Tensor,
         tgt_tokens: torch.Tensor,
+        manual_kl_step: bool = False,
     ) -> Dict[str, torch.Tensor]:
         # srt_tokens ~ (batch size, seq length)
         # tgt_tokens ~ (batch size, seq length)
@@ -100,12 +107,12 @@ class NonAutoLmModel(TorchModule, Registrable):
         )
         # src_mask ~ (batch * samples, seq length)
         src_mask = repeat(
-            src_mask, "batch seq -> batch samples seq", samples=self._nsamples_posterior
-        ).view(-1, src_mask.size(1))
+            src_mask, "batch seq -> (batch samples) seq", samples=self.nsamples_posterior
+        )
         # tgt_tokens ~ (batch * samples, seq length)
         tgt_tokens = repeat(
-            tgt_tokens, "batch seq -> batch samples seq", samples=self._nsamples_posterior
-        ).view(-1, tgt_tokens.size(1))
+            tgt_tokens, "batch seq -> (batch samples) seq", samples=self.nsamples_posterior
+        )
         decoded_output = {
             f"decoder_{x}": self._unwrap_samples(tensor, batch, *tensor.size()[1:])
             for x, tensor in self.decode(latent.z, src_mask, target=tgt_tokens).items()
@@ -120,14 +127,15 @@ class NonAutoLmModel(TorchModule, Registrable):
         # kl_loss ~ (batch size, samples) -> (1)
         kl_loss = self._unwrap_samples(posterior_log_prob - prior_log_prob, batch).mean()
         # Step KL Scheduler and recompute KL weight
-        self._kl_scheduler.step()
+        if not manual_kl_step:
+            self.kl_scheduler_step()
         # Construct output dictionary
         output_dict = {
             "loss_info": {
-                "kl_weight": self._kl_scheduler.kl_weight,
-                "batch_kl": kl_loss,
-                "batch_recon": recon_error,
-                "batch_loss": recon_error + self._kl_scheduler.kl_weight * kl_loss,
+                "kl-weight": self._kl_scheduler.kl_weight,
+                "batch-kl": kl_loss,
+                "batch-nll": recon_error,
+                "batch-loss": recon_error + self._kl_scheduler.kl_weight * kl_loss,
             },
             "source": src_tokens,
             "target": tgt_tokens,
@@ -135,10 +143,13 @@ class NonAutoLmModel(TorchModule, Registrable):
         }
         # Update metrics
         self._perplexity(recon_error)
-        self._avgs["avg_kl_weight"](self._kl_scheduler.kl_weight)
-        self._avgs["avg_kl_loss"](kl_loss)
-        self._avgs["avg_recon_error"](recon_error)
+        self._avgs["avg-kl-weight"](self._kl_scheduler.kl_weight)
+        self._avgs["avg-kl"](kl_loss)
+        self._avgs["avg-nll"](recon_error)
         return output_dict
+
+    def kl_scheduler_step(self) -> None:
+        self._kl_scheduler.step()
 
     def _get_prior_log_prob(self, z: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Get Log Probability of Prior Distribution based on `z` and its `mask`."""
@@ -259,7 +270,7 @@ class NonAutoLmModel(TorchModule, Registrable):
 
     def _unwrap_samples(self, x: torch.Tensor, batch: int, *sizes) -> torch.Tensor:
         """Unwrap samples to separate dimension."""
-        return x.view(batch, self._nsamples_posterior, *sizes)
+        return x.view(batch, self.nsamples_posterior, *sizes)
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         return {
@@ -282,6 +293,29 @@ class NonAutoLmModel(TorchModule, Registrable):
         for sample in tokens.tolist():
             texts.append(self._vocab.decode(sample, namespace=namespace, as_string=True))
         return texts
+
+    def calc_mutual_info(self, src_tokens: torch.Tensor, random: bool = True) -> torch.Tensor:
+        """
+        Approximate the mutual information between:
+
+        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_q(z)[log q(z)]`
+
+        Parameters
+        ----------
+        src_tokens : `torch.Tensor`, required
+            Input source tokens.
+        random : `bool`, optional (default = `True`)
+            Whether to perform sampling in posterior or not.
+        """
+        raise NotImplementedError()
+
+    def encoder_parameters(self) -> Iterator[torch.nn.Parameter]:
+        """Return parameters for encoder: q(z|x)."""
+        raise NotImplementedError()
+
+    def decoder_parameters(self) -> Iterator[torch.nn.Parameter]:
+        """Return parameters for decoder: p(x|z)."""
+        raise NotImplementedError()
 
     @classmethod
     def load(

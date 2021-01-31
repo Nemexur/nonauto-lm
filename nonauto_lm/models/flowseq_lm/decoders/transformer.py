@@ -33,8 +33,9 @@ class TransformerDecoder(Decoder):
         num_layers: int,
         num_heads: int,
         dropout: float = 0.0,
+        skip_z: bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(skip_z)
         self._input_size = input_size
         self._pos_enc = PositionalEncoding(input_size)
         self._layers = torch.nn.ModuleList([
@@ -50,10 +51,13 @@ class TransformerDecoder(Decoder):
         return self._input_size
 
     def get_output_size(self) -> int:
-        return self._input_size
+        output_size = self._input_size
+        if self._skip_z:
+            output_size += self._input_size
+        return output_size
 
     @overrides
-    def forward(self, z: torch.Tensor, mask: torch.LongTensor) -> torch.Tensor:
+    def decoder(self, z: torch.Tensor, mask: torch.LongTensor) -> torch.Tensor:
         z = self._dropout(z)
         z = self._pos_enc(z) * mask.unsqueeze(-1)
         for layer in self._layers:

@@ -14,8 +14,9 @@ class SimpleDecoder(Decoder):
         hidden_sizes: List[int],
         ff_activation: str = "elu",
         dropout: float = 0.0,
+        skip_z: bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(skip_z)
         self._input_size = input_size
         self._feedforward = FeedForward(
             input_size=input_size,
@@ -25,6 +26,8 @@ class SimpleDecoder(Decoder):
             dropout=dropout,
         )
         self._output_size = self._feedforward.get_output_size()
+        if skip_z:
+            self._output_size += input_size
         if dropout > 0.0:
             self._dropout = torch.nn.Dropout(dropout)
         else:
@@ -37,6 +40,6 @@ class SimpleDecoder(Decoder):
         return self._output_size
 
     @overrides
-    def forward(self, z: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def decoder(self, z: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         z = self._dropout(z)
         return self._feedforward(z)

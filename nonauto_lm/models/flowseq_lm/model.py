@@ -1,10 +1,12 @@
-from typing import List, Tuple, Dict, Type, T
+from typing import List, Tuple, Dict, Type, T, Iterator
 import torch
 from overrides import overrides
 import nonauto_lm.nn.utils as util
 from torch_nlp_utils.data import Vocabulary
-from nonauto_lm.nn.kl_scheduler import IKLScheduler
-from nonauto_lm.models.base import NonAutoLmModel, PriorSample, PosteriorSample, Embedder, LatentSample
+from nonauto_lm.nn.kl_scheduler import KLScheduler
+from nonauto_lm.models.base import (
+    NonAutoLmModel, PriorSample, PosteriorSample, Embedder, LatentSample
+)
 # Modules
 from .priors import Prior
 from .posteriors import Posterior
@@ -17,12 +19,12 @@ class FlowModel(NonAutoLmModel):
     def __init__(
         self,
         vocab: Vocabulary,
-        kl_scheduler: IKLScheduler,
         embedder: Embedder,
         encoder: Encoder,
         decoder: Decoder,
         posterior: Posterior,
         prior: Prior,
+        kl_scheduler: KLScheduler,
         num_samples_from_posterior: int = 1,
         label_smoothing: float = 0.0,
     ) -> None:
@@ -151,29 +153,61 @@ class FlowModel(NonAutoLmModel):
             log_prob : `torch.Tensor`
                 Log probability for sample.
         """
-        posterior_sample = self._posterior(encoded, mask, self._nsamples_posterior, random=random)
+        posterior_sample = self._posterior(encoded, mask, self.nsamples_posterior, random=random)
         return PosteriorSample(*posterior_sample)
 
     @overrides
-    def _get_prior_log_prob(self, z: LatentSample, mask: torch.Tensor) -> torch.Tensor:
+    def _get_prior_log_prob(self, z: LatentSample, mask: torch.Tensor = None) -> torch.Tensor:
         """Get Log Probability of Prior Distribution based on `z` and its `mask`."""
         return self._prior.log_probability(z, mask)
 
+    @overrides
+    def calc_mutual_info(self, src_tokens: torch.Tensor, random: bool = True) -> torch.Tensor:
+        """
+        Approximate the mutual information between:
+
+        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_q(z)[log q(z)]`
+
+        Parameters
+        ----------
+        src_tokens : `torch.Tensor`, required
+            Input source tokens.
+        random : `bool`, optional (default = `True`)
+            Whether to perform sampling in posterior or not.
+        """
+        src_encoded, src_mask = self.encode(src_tokens)
+        latent, posterior_log_prob = self._sample_from_posterior(
+            src_encoded, mask=src_mask, random=True
+        )
+        return self._posterior.calc_mutual_info(
+            latent, posterior_log_prob, mask=src_mask, samples=self.nsamples_posterior
+        )
+
+    @overrides
+    def encoder_parameters(self) -> Iterator[torch.nn.Parameter]:
+        """Return parameters for encoder: `q(z|x)`."""
+        return list(self._encoder.parameters()) + list(self._posterior.parameters())
+
+    @overrides
+    def decoder_parameters(self) -> Iterator[torch.nn.Parameter]:
+        """Return parameters for decoder: `p(x|z)`."""
+        return list(self._decoder.parameters())
+
     @classmethod
     def from_params(cls: Type[T], vocab: Vocabulary, **params) -> T:
-        kl_scheduler = IKLScheduler.from_params(**params.pop("kl_scheduler"))
         embedder = Embedder.from_params(vocab=vocab, **params.pop("embedder"))
         encoder = Encoder.from_params(**params.pop("encoder"))
         decoder = Decoder.from_params(**params.pop("decoder"))
         posterior = Posterior.from_params(**params.pop("posterior"))
         prior = Prior.from_params(**params.pop("prior"))
+        kl_scheduler = KLScheduler.from_params(**params.pop("kl_scheduler"))
         return cls(
             vocab=vocab,
-            kl_scheduler=kl_scheduler,
             embedder=embedder,
             encoder=encoder,
             decoder=decoder,
             posterior=posterior,
             prior=prior,
+            kl_scheduler=kl_scheduler,
             **params
         )

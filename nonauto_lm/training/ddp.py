@@ -50,7 +50,7 @@ def on_batch_start(func: Callable):
     @wraps(func)
     def wrapper(cls: Type[T], *args, **kwargs):
         # Place import here to avoid circular imports
-        from .trainer import Trainer
+        from nonauto_lm.training.trainers import Trainer
 
         as_trainer = cast(Trainer, cls)
         done_early = (
@@ -66,7 +66,7 @@ def on_epoch_end(func: Callable):
     @wraps(func)
     def wrapper(cls: Type[T], *args, **kwargs):
         # Place import here to avoid circular imports
-        from .trainer import Trainer
+        from nonauto_lm.training.trainers import Trainer
 
         as_trainer = cast(Trainer, cls)
         loss, done_early = func(as_trainer, *args, **kwargs)
