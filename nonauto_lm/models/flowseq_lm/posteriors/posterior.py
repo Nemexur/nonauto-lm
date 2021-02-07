@@ -159,19 +159,19 @@ class Posterior(TorchModule, Registrable):
         """
         # We need to compute log_prob manually as it depends on mu and sigma
         # computed over batch
-        log_pi_part = math.log(2 * math.pi)
-        log_sigma_part = 2 * self._sigma.log()
-        log_prob = -0.5 * (log_pi_part + 1 + log_sigma_part)
-        # Different version.
-        # It's close to the one above (from Kingma VAE Paper) but not the same.
-        # log_prob = (
-        #     -0.5 * (
-        #         (z - self._mu)**2
-        #         * self._sigma.pow(2).reciprocal()
-        #         + 2 * self._sigma.log()
-        #         + math.log(2 * math.pi)
-        #     )
-        # )
+        # Log posterior probability calculation from Kingma VAE Paper.
+        # log_pi_part = math.log(2 * math.pi)
+        # log_sigma_part = 2 * self._sigma.log()
+        # log_prob = -0.5 * (log_pi_part + 1 + log_sigma_part)
+        # Log posterior probability calculation if we sample only one latent code from q(z)
+        log_prob = (
+            -0.5 * (
+                (z - self._mu).pow(2)
+                * self._sigma.pow(2).reciprocal()
+                + 2 * self._sigma.log()
+                + math.log(2 * math.pi)
+            )
+        )
         log_prob = log_prob * mask.unsqueeze(-1)
         # Sum over all dimensions except batch
         return torch.einsum("b...->b", log_prob)
@@ -182,11 +182,11 @@ class Posterior(TorchModule, Registrable):
         """
         Approximate the mutual information between `input` and `sampled latent codes`:
 
-        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_q(z)[log q(z)]`
+        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_p(x){E_q(z|x)[log q(z)]}`
 
         Parameters
         ----------
-        latent : `LatentSample`, required
+        z : `torch.Tensor`, required
             Latent sample from Posterior forward.
         log_prob : `torch.Tensor`, required
             Log probability of sampled latent codes.
@@ -195,9 +195,9 @@ class Posterior(TorchModule, Registrable):
         samples : `int`, optional (default = `1`)
             Number of samples from posterior.
         """
-        # latent.z ~ (batch size * samples, seq length, hidden size)
-        # latent.mu ~ (batch size, seq length, hidden size)
-        # latent.sigma ~ (batch size, seq length, hidden size)
+        # z ~ (batch size * samples, seq length, hidden size)
+        # log_prob ~ (batch size * samples)
+        # mask ~ (batch size * samples, seq length)
         mu = repeat(
             self._mu, "batch seq size -> (batch samples) seq size", samples=samples
         )

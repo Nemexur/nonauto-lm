@@ -1,5 +1,4 @@
 from typing import Tuple
-import math
 import torch
 import torch.distributions as D
 from overrides import overrides
@@ -111,13 +110,13 @@ class DefaultPrior(Prior):
 
     @overrides
     def log_probability(self, z: LatentSample, mask: torch.Tensor = None) -> torch.Tensor:
-        # For now I don't understand the reason but
-        # self.base_dist.log_prob doesn't produce the same result.
-        # It's really close but not the same.
-        log_pi_part = math.log(2 * math.pi)
-        square_mu_part = z.mu**2
-        square_sigma_part = z.sigma**2
-        log_prob = -0.5 * (log_pi_part + square_mu_part + square_sigma_part)
+        # Log prior probability calculation based on formula from Kingma paper
+        # log_pi_part = math.log(2 * math.pi)
+        # square_mu_part = z.mu**2
+        # square_sigma_part = z.sigma**2
+        # log_prob = -0.5 * (log_pi_part + square_mu_part + square_sigma_part)
+        # Log prior probability calculation if we sample only one latent code from q(z)
+        log_prob = self.base_dist.log_prob(z.z)
         if mask is not None:
             log_prob = log_prob * mask.unsqueeze(-1)
         # Sum over all dimensions except batch

@@ -127,7 +127,7 @@ class FlowModel(NonAutoLmModel):
         return PriorSample(z, log_prob, mask)
 
     @overrides
-    def _sample_from_posterior(
+    def sample_from_posterior(
         self,
         encoded: torch.Tensor,
         mask: torch.Tensor,
@@ -166,7 +166,7 @@ class FlowModel(NonAutoLmModel):
         """
         Approximate the mutual information between:
 
-        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_q(z)[log q(z)]`
+        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_p(x){E_q(z|x)[log q(z)]}`
 
         Parameters
         ----------
@@ -176,11 +176,11 @@ class FlowModel(NonAutoLmModel):
             Whether to perform sampling in posterior or not.
         """
         src_encoded, src_mask = self.encode(src_tokens)
-        latent, posterior_log_prob = self._sample_from_posterior(
+        latent, posterior_log_prob = self.sample_from_posterior(
             src_encoded, mask=src_mask, random=True
         )
         return self._posterior.calc_mutual_info(
-            latent, posterior_log_prob, mask=src_mask, samples=self.nsamples_posterior
+            latent.z, posterior_log_prob, mask=src_mask, samples=self.nsamples_posterior
         )
 
     @overrides

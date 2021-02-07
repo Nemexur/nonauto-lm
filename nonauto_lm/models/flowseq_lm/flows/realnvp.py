@@ -9,16 +9,37 @@ from nonauto_lm.nn.feedforward import FeedForward
 @Flow.register("real-nvp")
 class RealNVP(Flow):
     """
-    An implementation of a RealNVP from Density estimation using Real NVP:
+    An implementation of RealNVP from `Density estimation using Real NVP`:
     (https://arxiv.org/abs/1605.08803).
+
+    Parameters
+    ----------
+    input_size : `int`, required
+        Size of input features
+    hidden_sizes : `Union[int, List[int]]`, optional (default = `24`)
+        List of hidden sizes for FeedForward network for scale and bias.
+    activation : `str`, optional (default = `"elu"`)
+        Activation for FeedForward network.
     """
 
     def __init__(
         self,
         input_size: int,
         hidden_sizes: Union[int, List[int]] = 24,
-        activation: str = "leaky_relu",
+        activation: str = "elu",
     ) -> None:
+        """
+        [summary]
+
+        Parameters
+        ----------
+        input_size : `int`, required
+            [description]
+        hidden_sizes : `Union[int, List[int]]`, optional (default = `24`)
+            [description]
+        activation : `str`, optional (default = `"leaky_relu"`)
+            [description]
+        """
         super().__init__()
         assert input_size // 2, "Input features should be divesable by 2."
         self._input_size = input_size

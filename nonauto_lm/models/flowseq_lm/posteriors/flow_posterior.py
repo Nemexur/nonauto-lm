@@ -25,13 +25,13 @@ class FlowPosterior(Posterior):
         z = z0
         # log_prob ~ (batch size * samples)
         log_prob = self.log_probability(z0, mask)
-        log_det_accum = z.new_zeros(z.size(0))
+        sum_log_det = z.new_zeros(z.size(0))
         for flow in self._flows:
             # z ~ (batch size * samples, seq length, hidden size)
             # log_det ~ (batch size * samples)
             z, log_det = flow(z, mask)
-            log_det_accum += log_det
-        return LatentSample(z, self._mu, self._sigma), log_prob - log_det_accum
+            sum_log_det += log_det
+        return LatentSample(z, self._mu, self._sigma), log_prob - sum_log_det
 
     @overrides
     def backward(
@@ -41,19 +41,19 @@ class FlowPosterior(Posterior):
         # z ~ (batch size, seq length, hidden size)
         # mask ~ (batch size, seq length)
         output = z
-        log_det_accum = output.new_zeros(*output.size()[:-1])
+        sum_log_det = output.new_zeros(*output.size()[:-1])
         for flow in self._flows[::-1]:
             # output ~ (batch size, seq length, hidden size)
             # log_det ~ (batch size)
             output, log_det = flow.backward(output, mask)
-            log_det_accum += log_det
+            sum_log_det += log_det
         # log_prob ~ (batch size)
         # Sum over all dimensions except batch
         log_prob = torch.einsum(
             "b...->b",
             self.base_dist.log_prob(z) * mask.unsqueeze(-1)
         )
-        return output, log_prob - log_det_accum
+        return output, log_prob - sum_log_det
 
     @classmethod
     def from_params(cls: Type[T], **params) -> T:

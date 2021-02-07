@@ -270,7 +270,6 @@ class TransformerDecoderLayer(torch.nn.Module):
         hidden_size: int,
         num_heads: int,
         dropout: float = 0.0,
-        use_src: bool = False,
     ) -> None:
         super().__init__()
         self._attn = MultiHeadAttention(num_heads, input_size, dropout=dropout, mask_tril=True)
@@ -279,19 +278,11 @@ class TransformerDecoderLayer(torch.nn.Module):
             "attn": SublayerConnection(input_size, dropout=dropout),
             "pos_ffn": SublayerConnection(input_size, dropout=dropout),
         })
-        if use_src:
-            self._src_attn = MultiHeadAttention(num_heads, input_size, dropout=dropout)
-            self._sublayers["src_attn"] = SublayerConnection(input_size, dropout=dropout)
-        self._use_src = use_src
 
     def forward(
         self,
         x: torch.Tensor,
         mask: torch.Tensor,
-        src: torch.Tensor = None,
-        src_mask: torch.Tensor = None,
     ) -> torch.Tensor:
         x = self._sublayers["attn"](x, lambda x: self._attn(x, x, x, mask))
-        if self._use_src:
-            x = self._sublayers["src_attn"](x, lambda x: self._src_attn(x, src, src, src_mask))
         return self._sublayers["pos_ffn"](x, self._pos_ffn)

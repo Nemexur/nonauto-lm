@@ -102,7 +102,7 @@ class NonAutoLmModel(TorchModule, Registrable):
         src_encoded, src_mask = self.encode(src_tokens)
         # z ~ (batch size * samples, seq length, hidden size)
         # posterior_log_prob ~ (batch size * samples)
-        latent, posterior_log_prob = self._sample_from_posterior(
+        latent, posterior_log_prob = self.sample_from_posterior(
             src_encoded, mask=src_mask, random=True
         )
         # src_mask ~ (batch * samples, seq length)
@@ -126,8 +126,8 @@ class NonAutoLmModel(TorchModule, Registrable):
         recon_error = decoded_output.pop("decoder_loss").mean()
         # kl_loss ~ (batch size, samples) -> (1)
         kl_loss = self._unwrap_samples(posterior_log_prob - prior_log_prob, batch).mean()
-        # Step KL Scheduler and recompute KL weight
-        if not manual_kl_step:
+        # Step KL Scheduler and recompute KL weight for training
+        if not manual_kl_step and self.training:
             self.kl_scheduler_step()
         # Construct output dictionary
         output_dict = {
@@ -240,7 +240,7 @@ class NonAutoLmModel(TorchModule, Registrable):
         """
         raise NotImplementedError()
 
-    def _sample_from_posterior(
+    def sample_from_posterior(
         self,
         encoded: torch.Tensor,
         mask: torch.Tensor,
@@ -298,7 +298,7 @@ class NonAutoLmModel(TorchModule, Registrable):
         """
         Approximate the mutual information between:
 
-        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_q(z)[log q(z)]`
+        `I(x, z) = E_p(x){E_q(z|x)[log q(z|x)]} - E_p(x){E_q(z|x)[log q(z)]}`
 
         Parameters
         ----------

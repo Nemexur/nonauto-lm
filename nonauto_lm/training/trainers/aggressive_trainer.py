@@ -199,7 +199,6 @@ class AggressiveTrainer(Trainer):
         train_dataloader: DataIterator,
         validation_dataloader: DataIterator,
     ) -> Dict[str, float]:
-        best_mi = 0
         mi_not_improved = 0
         for epoch in range(self._epochs):
             # Train
@@ -219,19 +218,13 @@ class AggressiveTrainer(Trainer):
             validation_metrics = self.evaluate(
                 validation_dataloader, info={"epoch": epoch, "aggressive": self._aggressive}
             )
-            current_mi = validation_metrics["mutual-info"]
             # Check mutual info to finish aggressive training if needed
             if self._aggressive and self._model.is_kl_used:
-                if current_mi - best_mi < 0:
-                    mi_not_improved += 1
-                    logger.info(f"Mutual information not improved: {mi_not_improved}")
-                    # TODO: Maybe make a hyperparameter from it
-                    if mi_not_improved == 2:
-                        self._aggressive = False
-                        logger.info("Stop aggressive burning.")
-                else:
-                    mi_not_improved = 0
-                    best_mi = current_mi
+                mi_not_improved += 1
+                # 5 is an expected number of aggressive epochs based on experiments from the paper
+                if mi_not_improved == 5:
+                    self._aggressive = False
+                    logger.info("Stop aggressive burning.")
             if self._metric_patience:
                 self._metric_patience(validation_metrics)
             # Save model state only on master
@@ -262,7 +255,7 @@ class AggressiveTrainer(Trainer):
         return self._metric_patience.best_metrics if self._metric_patience else validation_metrics
 
     @torch.no_grad()
-    def calc_mutual_info(self, dataloader: DataIterator) -> float:
+    def calc_mutual_info(self, dataloader: DataIterator) -> torch.Tensor:
         self._pytorch_model.eval()
         dataloader_tqdm = util.tqdm_dataloader(dataloader, is_master=self._is_master)
         mi = 0
