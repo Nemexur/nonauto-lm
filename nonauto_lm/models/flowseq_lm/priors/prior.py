@@ -43,7 +43,7 @@ class Prior(TorchModule, Registrable):
         """
         raise NotImplementedError()
 
-    def log_probability(self, z: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def log_probability(self, latent: LatentSample, mask: torch.Tensor) -> torch.Tensor:
         """
         Compute log probability of z: p(z_k)
         where that z_k is generative flow output
@@ -51,9 +51,9 @@ class Prior(TorchModule, Registrable):
 
         Parameters
         ----------
-        z : `torch.Tensor`, required
+        latent : `LatentSample`, required
             Sampled latent codes.
-        tgt_mask : `torch.Tensor`, required
+        mask : `torch.Tensor`, optional (default = `None`)
             Mask for sampled z.
         """
         raise NotImplementedError()
@@ -109,14 +109,14 @@ class DefaultPrior(Prior):
         return epsilon, mask
 
     @overrides
-    def log_probability(self, z: LatentSample, mask: torch.Tensor = None) -> torch.Tensor:
+    def log_probability(self, latent: LatentSample, mask: torch.Tensor = None) -> torch.Tensor:
         # Log prior probability calculation based on formula from Kingma paper
         # log_pi_part = math.log(2 * math.pi)
-        # square_mu_part = z.mu**2
-        # square_sigma_part = z.sigma**2
+        # square_mu_part = latent.mu**2
+        # square_sigma_part = latent.sigma**2
         # log_prob = -0.5 * (log_pi_part + square_mu_part + square_sigma_part)
         # Log prior probability calculation if we sample only one latent code from q(z)
-        log_prob = self.base_dist.log_prob(z.z)
+        log_prob = self.base_dist.log_prob(latent.z)
         if mask is not None:
             log_prob = log_prob * mask.unsqueeze(-1)
         # Sum over all dimensions except batch
