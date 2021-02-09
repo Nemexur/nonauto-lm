@@ -4,9 +4,16 @@ version = "0.1.0"
 description = ""
 authors = ["nemexur <alex.milogradsky@gmail.com>"]
 
+[[tool.poetry.source]]
+name = "pytorch-registry"
+url = "https://eternalphane.github.io/pytorch-pypi"
+
 [tool.poetry.dependencies]
 python = "~3.7.3"
-torch = "1.7.0"
+torch = [
+  {version = "1.7.0", platform = "darwin"},
+  {version = "1.7.0+cu101", source = "pytorch-registry", platform = "linux"},
+]
 loguru = "^0.5.3"
 tqdm = "^4.55.0"
 cleo = "^0.8.1"
