@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "nonauto-lm"
+name = "vae-lm"
 version = "0.1.0"
 description = ""
 authors = ["nemexur <alex.milogradsky@gmail.com>"]
@@ -55,7 +55,7 @@ exclude = '''
 '''
 
 [tool.poetry.scripts]
-nonauto-lm = 'nonauto_lm.cli:main'
+vae-lm = 'vae_lm.cli:main'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
