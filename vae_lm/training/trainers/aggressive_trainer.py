@@ -254,41 +254,6 @@ class AggressiveTrainer(Trainer):
                 break
         return self._metric_patience.best_metrics if self._metric_patience else validation_metrics
 
-    @torch.no_grad()
-    def calc_mutual_info(self, dataloader: DataIterator) -> torch.Tensor:
-        self._pytorch_model.eval()
-        dataloader_tqdm = util.tqdm_dataloader(dataloader, is_master=self._is_master)
-        mi = 0
-        num_examples = 0
-        for batch in dataloader_tqdm:
-            # We only need src_tokens
-            src_tokens = batch.to_device(device=self._cuda_device, non_blocking=True)["src_tokens"]
-            batch_size = src_tokens.size(0)
-            mutual_info = self._model.calc_mutual_info(src_tokens).item()
-            mi += mutual_info * batch_size * self._model.nsamples_posterior
-            num_examples += batch_size
-            dataloader_tqdm.set_description(
-                f"mutual-info: {mi / num_examples:.4f}, num-examples: {num_examples}", refresh=False
-            )
-        return mi / num_examples
-
-    @torch.no_grad()
-    def evaluate(
-        self,
-        dataloader: DataIterator,
-        desc="Validation",
-        info: Dict[str, Union[float, int, str]] = None,
-    ) -> Dict[str, float]:
-        self._pytorch_model.eval()
-        metrics = self._fit(dataloader, is_train=False)
-        # Calculate mutual info
-        current_mi = self.calc_mutual_info(dataloader)
-        metrics["mutual-info"] = current_mi
-        # Log metrics only on master
-        if self._is_master:
-            training_util.log_metrics(mode_str=desc, info=info, metrics=metrics, log_to_wandb=self._use_wandb)
-        return metrics
-
     @classmethod
     def from_params(
         cls: Type[T],

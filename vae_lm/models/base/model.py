@@ -288,9 +288,8 @@ class VAELmModel(TorchModule, Registrable):
         """
         # tokens ~ (batch size, seq length)
         texts = []
-        decoder = self._vocab.get_decoder()
         for sample in tokens.tolist():
-            texts.append(" ".join(decoder({namespace: sample})))
+            texts.append(" ".join(self._vocab.decode({namespace: sample})))
         return texts
 
     def calc_mutual_info(self, src_tokens: torch.Tensor, random: bool = True) -> torch.Tensor:

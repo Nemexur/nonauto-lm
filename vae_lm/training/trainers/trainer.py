@@ -166,6 +166,23 @@ class Trainer(ABC, Registrable):
         return self._metric_patience.best_metrics if self._metric_patience else validation_metrics
 
     @torch.no_grad()
+    def calc_mutual_info(self, dataloader: DataIterator) -> float:
+        self._pytorch_model.eval()
+        dataloader_tqdm = util.tqdm_dataloader(dataloader, is_master=self._is_master)
+        mi = 0
+        num_examples = 0
+        for batch in dataloader_tqdm:
+            # We only need src_tokens
+            src_tokens = batch.to_device(device=self._cuda_device, non_blocking=True)["src_tokens"]
+            mutual_info = self._model.calc_mutual_info(src_tokens).item()
+            mi += mutual_info
+            num_examples += 1
+            dataloader_tqdm.set_description(
+                f"mutual-info: {mi / num_examples:.4f}", refresh=False
+            )
+        return mi / num_examples
+
+    @torch.no_grad()
     def evaluate(
         self,
         dataloader: DataIterator,
@@ -174,6 +191,9 @@ class Trainer(ABC, Registrable):
     ) -> Dict[str, float]:
         self._pytorch_model.eval()
         metrics = self._fit(dataloader, is_train=False)
+        # Calculate mutual info
+        current_mi = self.calc_mutual_info(dataloader)
+        metrics["mutual-info"] = current_mi
         # Log metrics only on master
         if self._is_master:
             training_util.log_metrics(mode_str=desc, info=info, metrics=metrics, log_to_wandb=self._use_wandb)
