@@ -61,11 +61,13 @@ class RecurrentDecoder(Decoder):
         step_input: torch.Tensor,
         decoder_state: Dict[str, torch.Tensor],
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        # step_input ~ (batch size, hidden size)
+        # step_input ~ (batch size)
         # decoder_state ~ dict with 3 keys:
         #   latent ~ (batch size, hidden size)
         #   hidden ~ (batch size, hidden size)
         #   cell ~ (batch size, hidden size)
+        # step_input ~ (batch size, hidden size)
+        step_input = self._embedder(step_input)
         new_hidden, new_cell = self._cell(
             step_input, (decoder_state["hidden"], decoder_state["cell"])
         )

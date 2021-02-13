@@ -42,10 +42,10 @@ class Decoder(ABC, TorchModule, Registrable):
         # Get Decoder State
         decoder_state = self._init_decoder_state(z)
         # Make initial prediction
-        if target is not None:
-            return self._forward_loop(decoder_state, target)
-        else:
-            return self._generate(decoder_state)
+        return (
+            self._forward_loop(decoder_state, target)
+            if target is not None else self._generate(decoder_state)
+        )
 
     def _forward_loop(self, decoder_state: Dict[str, torch.Tensor], target: torch.Tensor) -> torch.Tensor:
         all_logits = []
@@ -54,20 +54,20 @@ class Decoder(ABC, TorchModule, Registrable):
         # Make prediction for each timestep
         for timestep in range(target.size(1)):
             input_choice = self._choose_input(prediction, target[:, timestep])
-            timestep_input = self._embedder(input_choice)
-            logits, decoder_state = self.decoder_step(timestep_input, decoder_state)
+            logits, decoder_state = self.decoder_step(input_choice, decoder_state)
             scores = torch.softmax(logits, dim=-1)
             prediction = torch.argmax(scores, dim=-1)
             all_logits.append(logits.unsqueeze(1))
             all_predictions.append(prediction.unsqueeze(1))
-        # logits ~ (batch size, seq length, hidden size)
+        # logits ~ (batch size, seq length, vocab size)
         # predictions ~ (batch size, seq length)
         return torch.cat(all_logits, dim=1), torch.cat(all_predictions, dim=1)
 
     def _generate(self, decoder_state: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        # prediction ~ (batch size)
         prediction = decoder_state["hidden"].new_full(
             (decoder_state.batch_size, ), fill_value=self._sos_index
-        )
+        ).long()
         # log_probabilities ~ (batch_size, beam_size)
         # predictions ~ (batch_size, beam_size, max_steps)
         return self._beam_search.search(prediction, decoder_state, self._beam_step)
