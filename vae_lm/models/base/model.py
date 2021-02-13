@@ -216,7 +216,7 @@ class VAELmModel(TorchModule, Registrable):
         return decoded, prior_sample.log_prob
 
     def sample_from_prior(
-        self, samples: int, lengths: List[int]
+        self, samples: int, lengths: List[int] = None,
     ) -> PriorSample:
         """
         Sample latent codes from prior distribution.
@@ -225,8 +225,8 @@ class VAELmModel(TorchModule, Registrable):
         ----------
         samples : `int`, required
             Number of samples to gather.
-        lengths : `List[int]`, required
-            Lengths of each sample.
+        lengths : `List[int]`, optional (default = `None`)
+            Lengths of each sample. Value can not be None if non-autoregressive model is used.
 
         Returns
         -------
@@ -238,6 +238,7 @@ class VAELmModel(TorchModule, Registrable):
             mask : `torch.Tensor`
                 Mask for sampled tensor.
         """
+        # TODO: Add time to get sampling time
         raise NotImplementedError()
 
     def sample_from_posterior(
@@ -287,8 +288,9 @@ class VAELmModel(TorchModule, Registrable):
         """
         # tokens ~ (batch size, seq length)
         texts = []
+        decoder = self._vocab.get_decoder()
         for sample in tokens.tolist():
-            texts.append(self._vocab.decode(sample, namespace=namespace, as_string=True))
+            texts.append(" ".join(decoder({namespace: sample})))
         return texts
 
     def calc_mutual_info(self, src_tokens: torch.Tensor, random: bool = True) -> torch.Tensor:

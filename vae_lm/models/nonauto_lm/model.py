@@ -101,7 +101,7 @@ class NonAutoModel(VAELmModel):
 
     @overrides
     def sample_from_prior(
-        self, samples: int, lengths: List[int]
+        self, samples: int, lengths: List[int] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Sample latent codes from prior distirbution.
@@ -110,8 +110,8 @@ class NonAutoModel(VAELmModel):
         ----------
         samples : `int`, required
             Number of samples to gather.
-        lengths : `List[int]`, required
-            Lengths of each sample.
+        lengths : `List[int]`, optional (default = `None`)
+            Lengths of each sample. Value can not be None if non-autoregressive model is used.
 
         Returns
         -------

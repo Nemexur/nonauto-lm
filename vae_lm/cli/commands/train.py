@@ -15,7 +15,7 @@ from vae_lm.scripts.train_worker import train_worker
 class TrainCommand(Command):
     name = "train"
     description = "Train FlowSeq model for unconditional text generation."
-    arguments = [argument(name="config", description="Config to use for model training.")]
+    arguments = [argument("config", description="Config to use for model training.")]
     options = [
         option(
             "serialization-dir",
