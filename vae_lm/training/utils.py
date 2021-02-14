@@ -80,6 +80,7 @@ def archive_model(
     with tarfile.open(archive_file, "w:gz") as archive:
         archive.add(config_file, arcname=CONFIG_NAME)
         archive.add(weights_file, arcname=WEIGHTS_NAME)
+        archive.add(metrics_file, arcname=METRICS_NAME)
         archive.add(str(serialization_dir / "vocabulary"), arcname="vocabulary")
 
 
@@ -105,7 +106,7 @@ def load_archive(
             serialization_dir = archive_file
         else:
             with extracted_archive(archive_file, cleanup=False) as tempdir:
-                serialization_dir = tempdir
+                serialization_dir = Path(tempdir)
         weights_path = serialization_dir / WEIGHTS_NAME
         # Load config
         config = Params.from_file(str(serialization_dir / CONFIG_NAME))
