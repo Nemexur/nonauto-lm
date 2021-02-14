@@ -1248,7 +1248,7 @@ tqdm = "*"
 type = "git"
 url = "https://github.com/Nemexur/torch-nlp-utils.git"
 reference = "master"
-resolved_reference = "bed781e4ed37f55bbe414eb787a78152398d269a"
+resolved_reference = "20c2a9997511850851d6bbc46d6ab18993258fb1"
 
 [[package]]
 name = "tornado"

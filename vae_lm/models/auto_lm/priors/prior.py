@@ -3,7 +3,6 @@ import torch
 import torch.distributions as D
 from overrides import overrides
 from einops import rearrange
-from cached_property import cached_property
 from torch_nlp_utils.common import Registrable
 from vae_lm.models.base import TorchModule, LatentSample
 
@@ -59,7 +58,7 @@ class DefaultPrior(Prior):
         self._mu = mu
         self._std = std
 
-    @cached_property
+    @property
     def base_dist(self):
         return D.Normal(
             loc=torch.full(
@@ -77,11 +76,9 @@ class DefaultPrior(Prior):
         samples: int = 1,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # epsilon ~ (batch size, samples, features)
-        epsilon = self._base_dist.sample((batch, samples))
+        epsilon = self.base_dist.sample((batch, samples))
         # epsilon ~ (batch size * samples, features)
-        epsilon = rearrange(
-            epsilon, "batch samples size -> (batch samples) size", samples=samples
-        )
+        epsilon = rearrange(epsilon, "batch samples size -> (batch samples) size")
         return epsilon
 
     @overrides

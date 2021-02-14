@@ -1,4 +1,4 @@
-from typing import List, Dict, Union, Type, T, NamedTuple, Iterable
+from typing import List, Dict, Union, Type, T, NamedTuple, Iterable, Tuple
 import torch
 from pathlib import Path
 from einops import repeat
@@ -124,8 +124,8 @@ class VAELmModel(TorchModule, Registrable):
         # Losses
         # recon_error ~ (batch size, samples) -> (1)
         recon_error = decoded_output.pop("decoder_loss").mean()
-        # kl_loss ~ (batch size, samples) -> (1)
-        kl_loss = self._unwrap_samples(posterior_log_prob - prior_log_prob, batch).mean()
+        # kl_loss ~ (batch size * samples) -> (1)
+        kl_loss = (posterior_log_prob - prior_log_prob).mean()
         # Step KL Scheduler and recompute KL weight for training
         if not manual_kl_step and self.training:
             self.kl_scheduler_step()
@@ -195,7 +195,9 @@ class VAELmModel(TorchModule, Registrable):
         """
         raise NotImplementedError()
 
-    def sample(self, samples: int, lengths: List[int]) -> torch.Tensor:
+    def sample(
+        self, samples: int, lengths: List[int],
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         """
         Get samples from prior distribution and decode them.
 
@@ -211,7 +213,7 @@ class VAELmModel(TorchModule, Registrable):
         `torch.Tensor`
             Tensor of decoded samples sequences.
         """
-        prior_sample = self.sample_from_prior(samples, lengths)
+        prior_sample = self.sample_from_prior(samples, torch.LongTensor(lengths))
         decoded = self.decode(prior_sample.latent, prior_sample.mask)
         return decoded, prior_sample.log_prob
 
@@ -277,7 +279,7 @@ class VAELmModel(TorchModule, Registrable):
         }
 
     def make_output_human_readable(
-        self, tokens: torch.Tensor, namespace: str = "target"
+        self, output_dict: Dict[str, torch.Tensor], namespace: str = "target"
     ) -> List[str]:
         """
         Takes the result of `forward` and makes it human readable.  Most of the time, the only thing
@@ -286,11 +288,17 @@ class VAELmModel(TorchModule, Registrable):
         that most often happens in `Model.forward`, before you compute your metrics.
         This method `modifies` the input dictionary, and also `returns` the same dictionary.
         """
-        # tokens ~ (batch size, seq length)
         texts = []
-        for sample in tokens.tolist():
-            texts.append(" ".join(self._vocab.decode({namespace: sample})))
-        return texts
+        if output_dict["preds"].dim() < 3:
+            preds = output_dict["preds"].unsqueeze(-1)
+        else:
+            preds = output_dict["preds"]
+        for sample in preds.tolist():
+            texts.append([])
+            for item in sample:
+                texts[-1].append(" ".join(self._vocab.decode({namespace: item})[namespace]))
+        output_dict["texts"] = texts
+        return output_dict
 
     def calc_mutual_info(self, src_tokens: torch.Tensor, random: bool = True) -> torch.Tensor:
         """
@@ -350,7 +358,8 @@ class VAELmModel(TorchModule, Registrable):
             weights = torch.load(weights, map_location=device)
             weights = weights["model"] if not isinstance(weights, OrderedDict) else weights
         # Construct model
-        model = cls.from_params(vocab=vocab, **params).to(device)
+        model = cls.from_params(vocab=vocab, **params.get("model")).to(device)
         if weights:
             model.load_state_dict(weights)
+            model.eval()
         return model

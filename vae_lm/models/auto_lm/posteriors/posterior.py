@@ -5,7 +5,6 @@ from overrides import overrides
 import torch.distributions as D
 import vae_lm.nn.utils as util
 from einops import repeat, rearrange
-from cached_property import cached_property
 from vae_lm.models.base import TorchModule
 from vae_lm.models.base import LatentSample
 from torch_nlp_utils.common import Registrable
@@ -23,13 +22,13 @@ class Posterior(TorchModule, Registrable):
         self._sigma_net = torch.nn.Sequential(
             torch.nn.Linear(input_size, features),
             torch.nn.Softplus(),
-            torch.nn.Hardtanh(min_val=1e-4, max_val=5.)
+            torch.nn.Hardtanh(min_val=1e-4, max_val=5.),
         )
         # Placeholders for computed mu and sigma
         self._mu = None
         self._sigma = None
 
-    @cached_property
+    @property
     def base_dist(self):
         # N(0, 1)
         return D.Normal(
@@ -119,12 +118,7 @@ class Posterior(TorchModule, Registrable):
         z = self._mu.unsqueeze(1) + sample * self._sigma.unsqueeze(1)
         # z ~ (batch size * samples, hidden size)
         # sample ~ (batch size * samples, hidden size)
-        z = rearrange(
-            z, "batch samples size -> (batch samples) size", samples=samples
-        )
-        sample = rearrange(
-            sample, "batch samples size -> (batch samples) size", samples=samples
-        )
+        z = rearrange(z, "batch samples size -> (batch samples) size")
         return z
 
     def log_probability(

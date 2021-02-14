@@ -44,12 +44,11 @@ class Decoder(ABC, TorchModule, Registrable):
         # Make initial prediction
         return (
             self._forward_loop(decoder_state, target)
-            if target is not None else self._generate(decoder_state)
+            if target is not None else self._beam_generate(decoder_state)
         )
 
     def _forward_loop(self, decoder_state: Dict[str, torch.Tensor], target: torch.Tensor) -> torch.Tensor:
-        all_logits = []
-        all_predictions = []
+        all_logits, all_predictions = [], []
         prediction = target.new_full((target.size(0), ), fill_value=self._sos_index).long()
         # Make prediction for each timestep
         for timestep in range(target.size(1)):
@@ -64,12 +63,29 @@ class Decoder(ABC, TorchModule, Registrable):
         return torch.cat(all_logits, dim=1), torch.cat(all_predictions, dim=1)
 
     def _generate(self, decoder_state: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        all_log_probs, all_predictions = [], []
+        prediction = decoder_state["hidden"].new_full(
+            (decoder_state["latent"].size(0), ), fill_value=self._sos_index
+        ).long()
+        # Make prediction for each timestep
+        for timestep in range(self._max_timesteps):
+            logits, decoder_state = self.decoder_step(prediction, decoder_state)
+            scores = torch.softmax(logits, dim=-1)
+            prediction = torch.argmax(scores, dim=-1)
+            all_log_probs.append(logits.unsqueeze(1))
+            all_predictions.append(prediction.unsqueeze(1))
+        # logits ~ (batch size, seq length, vocab size)
+        # predictions ~ (batch size, seq length)
+        all_log_probs = torch.cat(all_log_probs, dim=1)
+        return torch.einsum("b...->b", all_log_probs), torch.cat(all_predictions, dim=1).unsqueeze(1)
+
+    def _beam_generate(self, decoder_state: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         # prediction ~ (batch size)
         prediction = decoder_state["hidden"].new_full(
-            (decoder_state.batch_size, ), fill_value=self._sos_index
+            (decoder_state["latent"].size(0), ), fill_value=self._sos_index
         ).long()
         # log_probabilities ~ (batch_size, beam_size)
-        # predictions ~ (batch_size, beam_size, max_steps)
+        # predictions ~ (batch_size, beam_size, seq length)
         return self._beam_search.search(prediction, decoder_state, self._beam_step)
 
     def _beam_step(

@@ -18,7 +18,7 @@ class FlowPosterior(Posterior):
     ) -> Tuple[LatentSample, torch.Tensor]:
         # encoded ~ (batch size, hidden size)
         # z0 ~ (batch size * samples, hidden size)
-        z0, mask = self.sample(encoded, samples=samples, random=True)
+        z0 = self.sample(encoded, samples=samples, random=True)
         z = z0
         # log_prob ~ (batch size * samples)
         log_prob = self.log_probability(z0)

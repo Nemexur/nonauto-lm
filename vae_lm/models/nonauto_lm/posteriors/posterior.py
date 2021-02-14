@@ -5,7 +5,6 @@ from overrides import overrides
 import torch.distributions as D
 import vae_lm.nn.utils as util
 from einops import repeat, rearrange
-from cached_property import cached_property
 from vae_lm.models.base import TorchModule
 from vae_lm.models.base import LatentSample
 from torch_nlp_utils.common import Registrable
@@ -29,7 +28,7 @@ class Posterior(TorchModule, Registrable):
         self._mu = None
         self._sigma = None
 
-    @cached_property
+    @property
     def base_dist(self):
         # N(0, 1)
         return D.Normal(
@@ -132,11 +131,8 @@ class Posterior(TorchModule, Registrable):
         # z ~ (batch size * samples, seq length, hidden size)
         # sample ~ (batch size * samples, seq length, hidden size)
         z = rearrange(
-            z, "batch samples seq size -> (batch samples) seq size", samples=samples
+            z, "batch samples seq size -> (batch samples) seq size"
         ) * mask.unsqueeze(-1)
-        sample = rearrange(
-            sample, "batch samples seq size -> (batch samples) seq size", samples=samples
-        )
         return z, mask
 
     def log_probability(
@@ -161,17 +157,19 @@ class Posterior(TorchModule, Registrable):
         # log_sigma_part = 2 * self._sigma.log()
         # log_prob = -0.5 * (log_pi_part + 1 + log_sigma_part)
         # Log posterior probability calculation if we sample only one latent code from q(z)
-        log_prob = (
-            -0.5 * (
-                (z - self._mu).pow(2)
-                * self._sigma.pow(2).reciprocal()
-                + 2 * self._sigma.log()
-                + math.log(2 * math.pi)
-            )
-        )
-        log_prob = log_prob * mask.unsqueeze(-1)
+        hidden_size = z.size(-1)
+        log_pi_part = mask.sum(dim=-1) * (math.log(2 * math.pi) * hidden_size)
+        log_prob = ((z - self._mu).pow(2) * self._sigma.pow(2).reciprocal()) + (2 * self._sigma.log())
+        # log_prob = (
+        #     -0.5 * (
+        #         (z - self._mu).pow(2)
+        #         * self._sigma.pow(2).reciprocal()
+        #         + 2 * self._sigma.log()
+        #         + math.log(2 * math.pi)
+        #     )
+        # )
         # Sum over all dimensions except batch
-        return torch.einsum("b...->b", log_prob)
+        return -0.5 * (torch.einsum("b...->b", log_prob) + log_pi_part)
 
     def calc_mutual_info(
         self, z: torch.Tensor, log_prob: torch.Tensor, mask: torch.Tensor, samples: int = 1

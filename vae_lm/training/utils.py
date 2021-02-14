@@ -166,20 +166,28 @@ def configure_world(func: Callable) -> Callable:
                 tags=config.pop("tags"),
             )
         # Run function
-        result = func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
-        if is_master:
-            serialization_dir = Path(config["serialization_dir"])
-            # Construct archive in distributed training there
-            # because wandb hangs in distributed training mode
-            # and we need to finish it manually then.
-            archive_model(
-                serialization_dir=serialization_dir,
-                weights=serialization_dir / "best-model",
-            )
-            if use_wandb:
-                # Save archived model to wandb
-                wandb.save(str(serialization_dir / "model.tar.gz"))
-                wandb.finish()
+        try:
+            result = func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
+        except Exception as error:
+            logger.error(error)
+            result = {}
+        finally:
+            if is_master:
+                serialization_dir = Path(config["serialization_dir"])
+                # Construct archive in distributed training there
+                # because wandb hangs in distributed training mode
+                # and we need to finish it manually then.
+                best_model = serialization_dir / "best-model"
+                if best_model.exists():
+                    archive_model(
+                        serialization_dir=serialization_dir,
+                        weights=best_model,
+                    )
+                if use_wandb:
+                    # Save archived model to wandb if exists
+                    if best_model.exists():
+                        wandb.save(str(serialization_dir / "model.tar.gz"))
+                    wandb.finish()
         return result
 
     wrapper.original = func
