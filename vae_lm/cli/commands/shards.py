@@ -21,7 +21,7 @@ class MakeShardsCommand(Command):
             "seed",
             None,
             default=13,
-            description="Random seed for sample-shard.",
+            description="Random seed for to randomly assign sample to a shard.",
             flag=False,
             value_required=False,
         ),
@@ -53,7 +53,7 @@ class MakeShardsCommand(Command):
         with file_path.open("r", encoding="utf-8") as file:
             for line in tqdm(map(lambda x: x.strip(), file), desc="Sharding dataset"):
                 choice = rng.randint(0, shards - 1)
-                self.write_to_shard(line, directory / f"shrads-{choice}.txt")
+                self.write_to_shard(line, directory / f"shard-{choice}.txt")
 
     @staticmethod
     def write_to_shard(line: str, shard_path: Path) -> None:
