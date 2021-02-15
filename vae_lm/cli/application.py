@@ -5,6 +5,7 @@ from .commands import (
     TrainCommand,
     SampleCommand,
     EvaluateCommand,
+    MakeShardsCommand,
     TrainSentencePieceModelCommand,
 )
 
@@ -21,5 +22,6 @@ class Application(BaseApplication):
             TrainCommand(),
             SampleCommand(),
             EvaluateCommand(),
+            MakeShardsCommand(),
             TrainSentencePieceModelCommand(),
         ]

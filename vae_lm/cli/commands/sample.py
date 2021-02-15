@@ -9,7 +9,7 @@ from cleo import option, argument, Command
 
 class SampleCommand(Command):
     name = "sample"
-    description = "Sample unconditional texts from NonAuto model."
+    description = "Sample unconditional texts from VAE Language Model."
     arguments = [argument("archive", description="Path to archive with trained model.")]
     options = [
         option(
