@@ -47,8 +47,6 @@ class VAELmModel(TorchModule, Registrable):
         when constructing embedding matrices or output classifiers (as the vocabulary holds the
         number of classes in your output, also), and translating model output into human-readable
         form.
-    num_samples_from_posterior : `int`, optional (default = `1`)
-        Number of samples to gather for each sequence from posterior.
     no_kl_steps : `int`, optional (default = `2000`)
         Number of steps without KL Divergence in Loss.
     kl_annealing_steps : `int`, optional (default = `10000`)
@@ -70,12 +68,10 @@ class VAELmModel(TorchModule, Registrable):
         self,
         vocab: Vocabulary,
         kl_scheduler: KLScheduler,
-        num_samples_from_posterior: int = 1,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__()
         self._vocab = vocab
-        self.nsamples_posterior = num_samples_from_posterior
         self._kl_scheduler = kl_scheduler
         # Loss
         self._loss = LabelSmoothingNLL(label_smoothing, size_average=False)
@@ -84,6 +80,10 @@ class VAELmModel(TorchModule, Registrable):
         self._avgs = {
             metric: Average() for metric in ["avg-kl-weight", "avg-kl", "avg-nll"]
         }
+
+    @property
+    def nsamples_posterior(self) -> int:
+        raise NotImplementedError()
 
     @property
     def is_kl_used(self) -> bool:
@@ -213,7 +213,7 @@ class VAELmModel(TorchModule, Registrable):
         `torch.Tensor`
             Tensor of decoded samples sequences.
         """
-        prior_sample = self.sample_from_prior(samples, torch.LongTensor(lengths))
+        prior_sample = self.sample_from_prior(samples, lengths)
         decoded = self.decode(prior_sample.latent, prior_sample.mask)
         return decoded, prior_sample.log_prob
 
@@ -361,5 +361,4 @@ class VAELmModel(TorchModule, Registrable):
         model = cls.from_params(vocab=vocab, **params.get("model")).to(device)
         if weights:
             model.load_state_dict(weights)
-            model.eval()
         return model

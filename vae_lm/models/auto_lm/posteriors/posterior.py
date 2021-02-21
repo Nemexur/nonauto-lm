@@ -12,9 +12,10 @@ from torch_nlp_utils.common import Registrable
 
 class Posterior(TorchModule, Registrable):
     """Generic class for Posterior Distribution."""
-    def __init__(self, input_size: int, features: int) -> None:
+    def __init__(self, input_size: int, features: int, samples: int = 1) -> None:
         super().__init__()
         self._features = features
+        self.samples = samples
         self._mu_net = torch.nn.Linear(input_size, features)
         # Ensure that sigma > 0
         # Also we might exponentiate result of self._sigma_net
@@ -37,7 +38,7 @@ class Posterior(TorchModule, Registrable):
         )
 
     def forward(
-        self, encoded: torch.Tensor, mask: torch.Tensor, samples: int = 1, random: bool = True
+        self, encoded: torch.Tensor, mask: torch.Tensor, random: bool = True
     ) -> Tuple[LatentSample, torch.Tensor]:
         """
         Forward pass for posterior.
@@ -48,8 +49,6 @@ class Posterior(TorchModule, Registrable):
             Encoded sequence.
         mask : `torch.LongTensor`, required
             Mask for encoded tokens.
-        samples : `int`, optional (default = `1`)
-            Number of additional samples for each sample.
         random : `bool`, optional (default = `True`)
             Whether to add randomness in posterior or not.
 
@@ -85,7 +84,7 @@ class Posterior(TorchModule, Registrable):
         raise NotImplementedError()
 
     def sample(
-        self, encoded: torch.Tensor, samples: int = 1, random: bool = True
+        self, encoded: torch.Tensor, random: bool = True
     ) -> torch.Tensor:
         """
         Sample sequences from prior distribution.
@@ -94,8 +93,6 @@ class Posterior(TorchModule, Registrable):
         ----------
         encoded : `torch.Tensor`, required
             Encoded sequence.
-        samples : `int`, optional (default = `1`)
-            Number of additional samples for each sample.
         random : `bool`, optional (default = `True`)
             Whether to add randomness in posterior or not.
 
@@ -112,8 +109,8 @@ class Posterior(TorchModule, Registrable):
         self._sigma = self._sigma_net(encoded)
         # sample ~ (batch size, samples, hidden size)
         sample = (
-            self.base_dist.sample((self._mu.size(0), samples))
-            if random else self._mu.new_zeros((self._mu.size(0), samples, self._mu.size(1)))
+            self.base_dist.sample((self._mu.size(0), self.samples))
+            if random else self._mu.new_zeros((self._mu.size(0), self.samples, self._mu.size(1)))
         )
         z = self._mu.unsqueeze(1) + sample * self._sigma.unsqueeze(1)
         # z ~ (batch size * samples, hidden size)
@@ -141,11 +138,17 @@ class Posterior(TorchModule, Registrable):
         # log_prob = -0.5 * (log_pi_part + 1 + log_sigma_part)
         # Log posterior probability calculation if we sample only one latent code from q(z)
         # log_prob ~ (batch size, hidden size)
+        mu = repeat(
+            self._mu, "batch size -> (batch samples) size", samples=self.samples
+        )
+        sigma = repeat(
+            self._sigma, "batch size -> (batch samples) size", samples=self.samples
+        )
         log_prob = (
             -0.5 * (
-                (z - self._mu).pow(2)
-                * self._sigma.pow(2).reciprocal()
-                + 2 * self._sigma.log()
+                (z - mu).pow(2)
+                * sigma.pow(2).reciprocal()
+                + 2 * sigma.log()
                 + math.log(2 * math.pi)
             )
         )
@@ -153,7 +156,7 @@ class Posterior(TorchModule, Registrable):
         return torch.einsum("b...->b", log_prob)
 
     def calc_mutual_info(
-        self, z: torch.Tensor, log_prob: torch.Tensor, samples: int = 1
+        self, z: torch.Tensor, log_prob: torch.Tensor
     ) -> torch.Tensor:
         """
         Approximate the mutual information between `input` and `sampled latent codes`:
@@ -166,16 +169,14 @@ class Posterior(TorchModule, Registrable):
             Latent sample from Posterior forward.
         log_prob : `torch.Tensor`, required
             Log probability of sampled latent codes.
-        samples : `int`, optional (default = `1`)
-            Number of samples from posterior.
         """
         # z ~ (batch size * samples, hidden size)
         # log_prob ~ (batch size * samples)
         mu = repeat(
-            self._mu, "batch size -> (batch samples) size", samples=samples
+            self._mu, "batch size -> (batch samples) size", samples=self.samples
         )
         sigma = repeat(
-            self._sigma, "batch size -> (batch samples) size", samples=samples
+            self._sigma, "batch size -> (batch samples) size", samples=self.samples
         )
         # Compare each latent code with other latent codes. It is needed based on formula
         # of E_q(z)[log g(z)] where q(z) = E_p(x)[q(z|x)]
@@ -210,15 +211,17 @@ class DefaultPosterior(Posterior):
         Size of input tensor.
     latent_dim : `int`, required
         Latent dimension for posterior.
+    samples : `int`, optional (default = `1`)
+        Number of samples to get from posterior for each item in batch.
     """
 
     @overrides
     def forward(
-        self, encoded: torch.Tensor, samples: int = 1, random: bool = True
+        self, encoded: torch.Tensor, random: bool = True
     ) -> Tuple[LatentSample, torch.Tensor]:
         # encoded ~ (batch size, hidden size)
         # z ~ (batch size * samples, hidden size)
-        z = self.sample(encoded, samples=samples, random=random)
+        z = self.sample(encoded, random=random)
         # log_prob ~ (batch size * samples)
         log_prob = self.log_probability(z)
         return LatentSample(z, self._mu, self._sigma), log_prob

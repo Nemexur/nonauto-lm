@@ -8,19 +8,19 @@ from vae_lm.models.base import LatentSample, Flow
 
 @Posterior.register("flow")
 class FlowPosterior(Posterior):
-    def __init__(self, input_size: int, features: int, flows: List[Flow]) -> None:
-        super().__init__(input_size, features)
+    def __init__(self, input_size: int, features: int, flows: List[Flow], samples: int = 1) -> None:
+        super().__init__(input_size, features, samples)
         self._flows = torch.nn.ModuleList(flows)
 
     @overrides
     def forward(
-        self, encoded: torch.Tensor, mask: torch.Tensor, samples: int = 1, random: bool = True
+        self, encoded: torch.Tensor, mask: torch.Tensor, random: bool = True
     ) -> Tuple[LatentSample, torch.Tensor]:
         # encoded ~ (batch size, seq length, hidden size)
         # mask ~ (batch size, seq length)
         # z0 ~ (batch size * samples, seq length, hidden size)
         # mask ~ (batch size * samples, seq length)
-        z0, mask = self.sample(encoded, mask, samples=samples, random=True)
+        z0, mask = self.sample(encoded, mask, random=True)
         z = z0
         # log_prob ~ (batch size * samples)
         log_prob = self.log_probability(z0, mask)

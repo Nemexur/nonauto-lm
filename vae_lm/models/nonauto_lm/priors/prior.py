@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 import torch
 import torch.distributions as D
 from overrides import overrides
@@ -80,9 +80,10 @@ class DefaultPrior(Prior):
     def sample(
         self,
         batch: int,
-        lengths: torch.LongTensor,
+        lengths: List[int],
         samples: int = 1,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        lengths = torch.LongTensor(lengths)
         if lengths.size(0) == 1:
             lengths = lengths.expand(batch)
         max_length = lengths.max().item()

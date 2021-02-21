@@ -26,13 +26,11 @@ class NonAutoModel(VAELmModel):
         posterior: Posterior,
         prior: Prior,
         kl_scheduler: KLScheduler,
-        num_samples_from_posterior: int = 1,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__(
             vocab=vocab,
             kl_scheduler=kl_scheduler,
-            num_samples_from_posterior=num_samples_from_posterior,
             label_smoothing=label_smoothing,
         )
         self._embedder = embedder
@@ -45,6 +43,10 @@ class NonAutoModel(VAELmModel):
             self._decoder.get_output_size(),
             vocab.get_vocab_size(namespace="target"),
         )
+
+    @property
+    def nsamples_posterior(self) -> int:
+        return self._posterior.samples
 
     @overrides
     def encode(self, tokens: torch.Tensor) -> EncoderOutput:
@@ -151,9 +153,7 @@ class NonAutoModel(VAELmModel):
             log_prob : `torch.Tensor`
                 Log probability for sample.
         """
-        posterior_sample = self._posterior(
-            encoded.output, encoded.mask, self.nsamples_posterior, random=random
-        )
+        posterior_sample = self._posterior(encoded.output, encoded.mask, random=random)
         return PosteriorSample(*posterior_sample)
 
     @overrides
@@ -177,9 +177,7 @@ class NonAutoModel(VAELmModel):
         """
         encoded = self.encode(src_tokens)
         latent, posterior_log_prob = self.sample_from_posterior(encoded, random=True)
-        return self._posterior.calc_mutual_info(
-            latent.z, posterior_log_prob, mask=encoded.mask, samples=self.nsamples_posterior
-        )
+        return self._posterior.calc_mutual_info(latent.z, posterior_log_prob, mask=encoded.mask)
 
     @overrides
     def encoder_parameters(self) -> Iterable[torch.nn.Parameter]:

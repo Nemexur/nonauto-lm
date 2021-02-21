@@ -26,13 +26,11 @@ class AutoModel(VAELmModel):
         posterior: Posterior,
         prior: Prior,
         kl_scheduler: KLScheduler,
-        num_samples_from_posterior: int = 1,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__(
             vocab=vocab,
             kl_scheduler=kl_scheduler,
-            num_samples_from_posterior=num_samples_from_posterior,
             label_smoothing=label_smoothing,
         )
         self._embedder = embedder
@@ -40,6 +38,10 @@ class AutoModel(VAELmModel):
         self._decoder = decoder
         self._posterior = posterior
         self._prior = prior
+
+    @property
+    def nsamples_posterior(self) -> int:
+        return self._posterior.samples
 
     @overrides
     def encode(self, tokens: torch.Tensor) -> EncoderOutput:
@@ -104,7 +106,7 @@ class AutoModel(VAELmModel):
         self, samples: int, lengths: List[int] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Sample latent codes from prior distirbution.
+        Sample latent codes from prior distribution.
 
         Parameters
         ----------
@@ -151,9 +153,7 @@ class AutoModel(VAELmModel):
             log_prob : `torch.Tensor`
                 Log probability for sample.
         """
-        posterior_sample = self._posterior(
-            encoded.ctx, self.nsamples_posterior, random=random
-        )
+        posterior_sample = self._posterior(encoded.ctx, random=random)
         return PosteriorSample(*posterior_sample)
 
     @overrides
@@ -177,9 +177,7 @@ class AutoModel(VAELmModel):
         """
         encoded = self.encode(src_tokens)
         latent, posterior_log_prob = self.sample_from_posterior(encoded, random=True)
-        return self._posterior.calc_mutual_info(
-            latent.z, posterior_log_prob, samples=self.nsamples_posterior
-        )
+        return self._posterior.calc_mutual_info(latent.z, posterior_log_prob)
 
     @overrides
     def encoder_parameters(self) -> Iterable[torch.nn.Parameter]:
