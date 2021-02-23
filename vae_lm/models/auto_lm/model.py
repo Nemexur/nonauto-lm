@@ -98,7 +98,15 @@ class AutoModel(VAELmModel):
         if target is not None:
             # Get padding mask
             weights = util.get_tokens_mask(target).float()
-            output_dict["loss"] = self._loss(output_dict["logits"], target, weights=weights)
+            # Get sequence excluding start of sequence token
+            # as it is being predicted by the model
+            relevant_target = target[:, 1:].contiguous()
+            relevant_weights = weights[:, 1:].contiguous()
+            output_dict["loss"] = self._loss(
+                output_dict["logits"],
+                relevant_target,
+                weights=relevant_weights,
+            )
         return output_dict
 
     @overrides

@@ -37,17 +37,26 @@ class RecurrentDecoder(Decoder):
         )
         self._cell = cell
         self._num_classes = num_classes
-        self._projection = FeedForward(
-            input_size=(
-                self._cell.get_output_size() + self._cell.get_input_size()
-                if skip_z else self._cell.get_output_size()
-            ),
-            num_layers=len(hidden_sizes),
-            hidden_sizes=hidden_sizes,
-            activations=Activation.by_name(ff_activation),
-            dropout=ff_dropout,
-            output_size=num_classes,
-        )
+        if hidden_sizes is not None:
+            self._projection = FeedForward(
+                input_size=(
+                    self._cell.get_output_size() + self._cell.get_input_size()
+                    if skip_z else self._cell.get_output_size()
+                ),
+                num_layers=len(hidden_sizes),
+                hidden_sizes=hidden_sizes,
+                activations=Activation.by_name(ff_activation),
+                dropout=ff_dropout,
+                output_size=num_classes,
+            )
+        else:
+            self._projection = torch.nn.Linear(
+                in_features=(
+                    self._cell.get_output_size() + self._cell.get_input_size()
+                    if skip_z else self._cell.get_output_size()
+                ),
+                out_features=num_classes,
+            )
 
     def get_input_size(self) -> int:
         return self._cell.get_input_size()
