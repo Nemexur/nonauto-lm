@@ -1,3 +1,8 @@
+"""
+This file is adopted from AllenNLP v0.9.0 with an addition of einops for certain operations.
+Copyright to the AllenNLP authors.
+"""
+
 from typing import List, Callable, Tuple, Dict
 import torch
 import warnings

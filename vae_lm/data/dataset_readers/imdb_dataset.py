@@ -11,6 +11,7 @@ from torch_nlp_utils.data import DatasetReader, CollateBatch, Batch
 # Deleted all special symbols from each sample and splitted them on sentences
 # train_test_split with test_size = 0.2, seed = 13
 # then splitted test with test_size = 0.5, seed = 13
+# Picked sentences with num tokens greater than 5
 @DatasetReader.register("imdb")
 class IMDBDatasetReader(DatasetReader):
     """

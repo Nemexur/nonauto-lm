@@ -18,6 +18,7 @@ class FocalLoss(torch.nn.Module):
     size_average : `bool`, optional (default = `True`)
         Whether to average over batch or not.
     """
+
     def __init__(
         self,
         alpha: Union[float, List[float]],

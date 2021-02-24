@@ -3,8 +3,8 @@ import torch
 from pathlib import Path
 from einops import repeat
 import vae_lm.nn.utils as util
-from .encoders import EncoderOutput
 from collections import OrderedDict
+from .encoders import EncoderOutput
 from .losses import LabelSmoothingNLL
 from .torch_module import TorchModule
 from torch_nlp_utils.data import Vocabulary
@@ -47,10 +47,8 @@ class VAELmModel(TorchModule, Registrable):
         when constructing embedding matrices or output classifiers (as the vocabulary holds the
         number of classes in your output, also), and translating model output into human-readable
         form.
-    no_kl_steps : `int`, optional (default = `2000`)
-        Number of steps without KL Divergence in Loss.
-    kl_annealing_steps : `int`, optional (default = `10000`)
-        Number of steps with KL Divergence annealing.
+    kl_scheduler: `KLScheduler`, required
+        Scheduler for KL part.
     label_smoothing : `float`, optional (default = `0.0`)
         Label smoothing for NLL Loss. If 0 ordinary NLL Loss is used.
 
@@ -143,9 +141,12 @@ class VAELmModel(TorchModule, Registrable):
         }
         # Update metrics
         self._perplexity(recon_error)
-        self._avgs["avg-kl-weight"](self._kl_scheduler.kl_weight)
-        self._avgs["avg-kl"](kl_loss)
-        self._avgs["avg-nll"](recon_error)
+        for item, value in [
+            ("avg-kl-weight", self._kl_scheduler.kl_weight),
+            ("avg-kl", kl_loss),
+            ("avg-nll", recon_error),
+        ]:
+            self._avgs[item](value)
         return output_dict
 
     def kl_scheduler_step(self) -> None:
@@ -294,9 +295,8 @@ class VAELmModel(TorchModule, Registrable):
         else:
             preds = output_dict["preds"]
         for sample in preds.tolist():
-            texts.append([])
-            for item in sample:
-                texts[-1].append(" ".join(self._vocab.decode({namespace: item})[namespace]))
+            # TODO: Simplify decode in Torch NLP Utils
+            texts.append([" ".join(self._vocab.decode({namespace: x})[namespace]) for x in sample])
         output_dict["texts"] = texts
         return output_dict
 

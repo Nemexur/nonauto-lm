@@ -1,3 +1,8 @@
+"""
+This file is adopted from PyTorch Lightning repo to simplify access to model device.
+Copyright to the PyTorch Lightning authors.
+"""
+
 import torch
 from overrides import overrides
 
