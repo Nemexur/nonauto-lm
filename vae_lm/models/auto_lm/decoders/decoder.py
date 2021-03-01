@@ -23,9 +23,7 @@ class Decoder(ABC, TorchModule, Registrable):
     ) -> None:
         super().__init__()
         if not 0 <= teacher_forcing_ratio <= 1:
-            raise ValueError(
-                "teacher_forcing_ratio should be in between 0 and 1."
-            )
+            raise ValueError("teacher_forcing_ratio should be in between 0 and 1.")
         self._embedder = embedder
         self._sos_index = sos_index
         self._eos_index = eos_index
@@ -34,24 +32,25 @@ class Decoder(ABC, TorchModule, Registrable):
         self._skip_z = skip_z
         self._beam_search = BeamSearch(eos_index, max_timesteps, beam_size=beam_size)
 
-    def forward(
-        self,
-        z: torch.Tensor,
-        target: torch.Tensor = None
-    ) -> torch.Tensor:
+    def forward(self, z: torch.Tensor, target: torch.Tensor = None) -> torch.Tensor:
         # Get Decoder State
         decoder_state = self._init_decoder_state(z)
         # Make initial prediction
         return (
             self._forward_loop(decoder_state, target)
-            if target is not None else self._beam_generate(decoder_state)
+            if target is not None
+            else self._beam_generate(decoder_state)
         )
 
-    def _forward_loop(self, decoder_state: Dict[str, torch.Tensor], target: torch.Tensor) -> torch.Tensor:
+    def _forward_loop(
+        self,
+        decoder_state: Dict[str, torch.Tensor],
+        target: torch.Tensor,
+    ) -> torch.Tensor:
         all_logits, all_predictions = [], []
-        prediction = target.new_full((target.size(0), ), fill_value=self._sos_index).long()
+        prediction = target.new_full((target.size(0),), fill_value=self._sos_index).long()
         # Make prediction for each timestep
-        for timestep in range(target.size(1)):
+        for timestep in range(target.size(1) - 1):
             input_choice = self._choose_input(prediction, target[:, timestep])
             logits, decoder_state = self.decoder_step(input_choice, decoder_state)
             scores = torch.softmax(logits, dim=-1)
@@ -62,11 +61,15 @@ class Decoder(ABC, TorchModule, Registrable):
         # predictions ~ (batch size, seq length)
         return torch.cat(all_logits, dim=1), torch.cat(all_predictions, dim=1)
 
-    def _generate(self, decoder_state: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _generate(
+        self, decoder_state: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         all_log_probs, all_predictions = [], []
-        prediction = decoder_state["hidden"].new_full(
-            (decoder_state["latent"].size(0), ), fill_value=self._sos_index
-        ).long()
+        prediction = (
+            decoder_state["hidden"]
+            .new_full((decoder_state["latent"].size(0),), fill_value=self._sos_index)
+            .long()
+        )
         # Make prediction for each timestep
         for timestep in range(self._max_timesteps):
             logits, decoder_state = self.decoder_step(prediction, decoder_state)
@@ -77,13 +80,20 @@ class Decoder(ABC, TorchModule, Registrable):
         # logits ~ (batch size, seq length, vocab size)
         # predictions ~ (batch size, seq length)
         all_log_probs = torch.cat(all_log_probs, dim=1)
-        return torch.einsum("b...->b", all_log_probs), torch.cat(all_predictions, dim=1).unsqueeze(1)
+        return (
+            torch.einsum("b...->b", all_log_probs),
+            torch.cat(all_predictions, dim=1).unsqueeze(1),
+        )
 
-    def _beam_generate(self, decoder_state: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _beam_generate(
+        self, decoder_state: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # prediction ~ (batch size)
-        prediction = decoder_state["hidden"].new_full(
-            (decoder_state["latent"].size(0), ), fill_value=self._sos_index
-        ).long()
+        prediction = (
+            decoder_state["hidden"]
+            .new_full((decoder_state["latent"].size(0),), fill_value=self._sos_index)
+            .long()
+        )
         # log_probabilities ~ (batch_size, beam_size)
         # predictions ~ (batch_size, beam_size, seq length)
         return self._beam_search.search(prediction, decoder_state, self._beam_step)
@@ -97,16 +107,10 @@ class Decoder(ABC, TorchModule, Registrable):
         log_prob = torch.log_softmax(logits, dim=-1)
         return log_prob, decoder_state
 
-    def _choose_input(
-        self,
-        prediction: torch.Tensor,
-        target: torch.Tensor
-    ) -> torch.Tensor:
+    def _choose_input(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         input_choice = target
         if self.training:
-            use_teacher_forcing = (
-                True if random.random() < self._teacher_forcing_ratio else False
-            )
+            use_teacher_forcing = True if random.random() < self._teacher_forcing_ratio else False
             input_choice = target if use_teacher_forcing else prediction
         return input_choice
 
