@@ -101,7 +101,7 @@ class DefaultPrior(Prior):
         # epsilon ~ (batch size * samples, seq length, features)
         epsilon = rearrange(epsilon, "batch samples seq size -> (batch samples) seq size")
         # mask ~ (batch size * samples, max length)
-        mask = repeat(mask, "batch seq -> (batch samples) seq")
+        mask = repeat(mask, "batch seq -> (batch samples) seq", samples=samples)
         return epsilon, mask
 
     @overrides

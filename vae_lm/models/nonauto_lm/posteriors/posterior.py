@@ -160,19 +160,16 @@ class Posterior(TorchModule, Registrable):
         sigma = repeat(
             self._sigma, "batch seq size -> (batch samples) seq size", samples=self.samples
         )
-        hidden_size = z.size(-1)
-        log_pi_part = mask.sum(dim=-1) * (math.log(2 * math.pi) * hidden_size)
-        log_prob = ((z - mu).pow(2) * sigma.pow(2).reciprocal()) + (2 * sigma.log())
-        # log_prob = (
-        #     -0.5 * (
-        #         (z - self._mu).pow(2)
-        #         * self._sigma.pow(2).reciprocal()
-        #         + 2 * self._sigma.log()
-        #         + math.log(2 * math.pi)
-        #     )
-        # )
+        log_prob = (
+            -0.5 * (
+                (z - mu).pow(2)
+                * sigma.pow(2).reciprocal()
+                + 2 * sigma.log()
+                + math.log(2 * math.pi)
+            )
+        )
         # Sum over all dimensions except batch
-        return -0.5 * (torch.einsum("b...->b", log_prob) + log_pi_part)
+        return torch.einsum("b...->b", log_prob * mask.unsqueeze(-1))
 
     def calc_mutual_info(
         self, z: torch.Tensor, log_prob: torch.Tensor, mask: torch.Tensor
