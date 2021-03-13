@@ -3,6 +3,7 @@ import torch
 from itertools import chain
 import vae_lm.nn.utils as util
 from overrides import overrides
+from vae_lm.nn.kl_loss import KLLoss
 from torch_nlp_utils.data import Vocabulary
 from vae_lm.nn.kl_scheduler import KLScheduler
 from vae_lm.models.base import (
@@ -25,11 +26,13 @@ class NonAutoModel(VAELmModel):
         decoder: Decoder,
         posterior: Posterior,
         prior: Prior,
+        kl_loss: KLLoss,
         kl_scheduler: KLScheduler,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__(
             vocab=vocab,
+            kl_loss=kl_loss,
             kl_scheduler=kl_scheduler,
             label_smoothing=label_smoothing,
         )
@@ -196,6 +199,7 @@ class NonAutoModel(VAELmModel):
         decoder = Decoder.from_params(**params.pop("decoder"))
         posterior = Posterior.from_params(**params.pop("posterior"))
         prior = Prior.from_params(**params.pop("prior"))
+        kl_loss = KLLoss.from_params(prior=prior, **params.pop("kl_loss"))
         kl_scheduler = KLScheduler.from_params(**params.pop("kl_scheduler"))
         return cls(
             vocab=vocab,
@@ -204,6 +208,7 @@ class NonAutoModel(VAELmModel):
             decoder=decoder,
             posterior=posterior,
             prior=prior,
+            kl_loss=kl_loss,
             kl_scheduler=kl_scheduler,
             **params
         )

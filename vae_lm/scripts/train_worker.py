@@ -3,7 +3,7 @@ import torch
 from loguru import logger
 import torch.distributed as dist
 from torch_nlp_utils.common import Params
-from vae_lm.training.utils import configure_world
+from vae_lm.training.utils import configure_world, seed_everything
 from torch_nlp_utils.data import DatasetReader, DataIterator, Vocabulary, Namespace, CollateBatch
 # Modules
 import vae_lm.nn.utils as util
@@ -43,6 +43,8 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
         vocab = Vocabulary.from_files(vocab_path)
     train_dataset.encode_with(vocab)
     valid_dataset.encode_with(vocab)
+    logger.debug(f"Seeding with seed: {config['seed']}")
+    seed_everything(config["seed"])
     # Construct Iterators
     logger.debug("Construct DataIterators.")
     train_dataloader = DataIterator(

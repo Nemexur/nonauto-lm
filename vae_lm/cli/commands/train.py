@@ -46,6 +46,14 @@ class TrainCommand(Command):
             default="-1",
         ),
         option(
+            "seed",
+            None,
+            description="Define random state for reproducibility.",
+            flag=False,
+            value_required=False,
+            default="13",
+        ),
+        option(
             "use-wandb",
             None,
             description="Whether to log metrics to Weights&Biases or not.",
@@ -102,6 +110,7 @@ class TrainCommand(Command):
         config["use_wandb"] = use_wandb
         config["cuda_devices"] = self.parse_cuda_devices()
         config["tags"] = self.parse_tags()
+        config["seed"] = int(self.option("seed"))
         # Run train worker in distributed mode or not depending on cuda devices
         if len(config["cuda_devices"]) > 1:
             ddp.spawn(process=train_worker, args=config, world_size=len(config["cuda_devices"]))

@@ -62,17 +62,17 @@ class Prior(TorchModule, Registrable):
 class DefaultPrior(Prior):
     def __init__(self, features: int, mu: float = 0.0, std: float = 1.0) -> None:
         super().__init__(features)
-        self._mu = mu
-        self._std = std
+        self.mu = mu
+        self.std = std
 
     @property
     def base_dist(self):
         return D.Normal(
             loc=torch.full(
-                (self._features, ), fill_value=self._mu, device=self.device, dtype=torch.float
+                (self._features, ), fill_value=self.mu, device=self.device, dtype=torch.float
             ),
             scale=torch.full(
-                (self._features, ), fill_value=self._std, device=self.device, dtype=torch.float
+                (self._features, ), fill_value=self.std, device=self.device, dtype=torch.float
             ),
         )
 

@@ -1,15 +1,19 @@
-from typing import NamedTuple, Dict, Callable, Union
+from typing import NamedTuple, Dict, Callable, Union, Any
 import os
 import json
 import wandb
+import torch
+import random
 import shutil
 import tarfile
 import tempfile
+import numpy as np
 from pathlib import Path
 from loguru import logger
 from copy import deepcopy
 from functools import wraps
 import torch.distributed as dist
+from rich.logging import RichHandler
 from contextlib import contextmanager
 import vae_lm.training.ddp as ddp
 from torch_nlp_utils.common import Params
@@ -147,6 +151,15 @@ def extracted_archive(resolved_archive_file, cleanup=True):
             shutil.rmtree(tempdir, ignore_errors=True)
 
 
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+
+
 def configure_world(func: Callable) -> Callable:
     """Decorator to configure Distributed Training world and wandb if needed for function."""
 
@@ -170,7 +183,7 @@ def configure_world(func: Callable) -> Callable:
         try:
             result = func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
         except Exception as error:
-            logger.error(error)
+            logger.bind(type="rich").exception(error)
             result = {}
         finally:
             if is_master:
@@ -243,3 +256,15 @@ def log_metrics(
         logger.info(f"{metric.ljust(max_length)} | {metric_value:.4f}")
     if log_to_wandb:
         wandb.log({f"{mode_str.lower()}/{k}": v for k, v in metrics.items()})
+
+
+def setup_logging() -> None:
+    def make_filter(name: str):
+        """Function to construct filter by name for Handler messages."""
+
+        def filter(record: Dict[str, Any]) -> bool:
+            return record["extra"].get("type") == name
+
+        return filter
+
+    logger.add(RichHandler(rich_tracebacks=True), filter=make_filter("rich"), format="{message}")
