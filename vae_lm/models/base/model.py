@@ -163,7 +163,7 @@ class VAELmModel(TorchModule, Registrable):
                 "batch-kl": kl_loss.mean(),
                 "batch-nll": recon_error.mean(),
                 "batch-loss": batch_loss.mean(),
-                **{f"batch-{k}": v.mean() for k, v in kl_loss_output.items()},
+                **{k: v.mean() for k, v in kl_loss_output.items()},
             },
             "source": src_tokens,
             "target": tgt_tokens,
