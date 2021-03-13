@@ -139,7 +139,7 @@ class VAELmModel(TorchModule, Registrable):
                 posterior_log_prob,
                 prior_log_prob,
                 kl_weight=self._kl_scheduler.kl_weight,
-                **{"latent": latent.z},
+                latent=latent.z,
             ).items()
         }
         # kl_loss ~ (batch size, samples)
