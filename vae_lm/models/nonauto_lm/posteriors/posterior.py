@@ -14,8 +14,8 @@ class Posterior(TorchModule, Registrable):
     """Generic class for Posterior Distribution."""
     def __init__(self, input_size: int, features: int, samples: int = 1) -> None:
         super().__init__()
-        self._features = features
         self.samples = samples
+        self._features = features
         self._mu_net = torch.nn.Linear(input_size, features)
         # Ensure that sigma > 0
         # Also we might exponentiate result of self._sigma_net

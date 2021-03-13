@@ -60,7 +60,6 @@ class InfoVAEKLLoss(KLLoss):
     def __init__(
         self,
         alpha: float,
-        beta: float,
         reg_weight: int,
         # Prior module from AutoVAE or NonAutoVAE. Do not place typing here to avoid circular imports.
         prior,
@@ -69,7 +68,6 @@ class InfoVAEKLLoss(KLLoss):
     ) -> None:
         super().__init__(free_bits_alpha)
         self._alpha = alpha
-        self._beta = beta
         self._reg_weight = reg_weight
         self._kernel_type = kernel_type
         self._prior = prior
@@ -93,8 +91,8 @@ class InfoVAEKLLoss(KLLoss):
         bias_corr = batch_size * (batch_size - 1)
         # loss ~ (batch size)
         loss = (
-            (1.0 - self.alpha) * kl_loss
-            + (self.alpha + self.reg_weight - 1.0) / bias_corr * mmd_loss
+            (1.0 - self._alpha) * kl_loss
+            + (self._alpha + self._reg_weight - 1.0) / bias_corr * mmd_loss
         )
         # Adding free bits to KL-Divergence
         loss = self._free_bits_kl(loss)

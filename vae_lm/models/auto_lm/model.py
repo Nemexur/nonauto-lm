@@ -28,12 +28,14 @@ class AutoModel(VAELmModel):
         prior: Prior,
         kl_loss: KLLoss,
         kl_scheduler: KLScheduler,
+        recon_weight: float = 1.0,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__(
             vocab=vocab,
             kl_loss=kl_loss,
             kl_scheduler=kl_scheduler,
+            recon_weight=recon_weight,
             label_smoothing=label_smoothing,
         )
         self._embedder = embedder

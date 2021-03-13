@@ -75,6 +75,7 @@ class VAELmModel(TorchModule, Registrable):
         kl_scheduler: KLScheduler,
         kl_loss: KLLoss,
         iwae: bool = False,
+        recon_weight: float = 1.0,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__()
@@ -82,6 +83,7 @@ class VAELmModel(TorchModule, Registrable):
         self._iwae = iwae
         self._kl_scheduler = kl_scheduler
         self._kl_loss = kl_loss
+        self._recon_weight = recon_weight
         # Loss
         self._loss = LabelSmoothingNLL(label_smoothing, size_average=False)
         # Metrics
@@ -145,7 +147,7 @@ class VAELmModel(TorchModule, Registrable):
         # kl_loss ~ (batch size, samples)
         kl_loss = kl_loss_output.pop("batch-loss")
         # batch_loss ~ (batch size, samples)
-        batch_loss = recon_error + kl_loss
+        batch_loss = self._recon_weight * recon_error + kl_loss
         if self._iwae:
             # weights ~ (batch size, samples)
             weights = batch_loss.softmax(dim=-1)
