@@ -38,7 +38,7 @@ class TrainCommand(Command):
             "cuda-devices",
             None,
             description=(
-                "CUDA Devices to train model on in format: {gpu_idx}{gpu_idx}. "
+                "CUDA Devices to train model on in format: {gpu_idx},{gpu_idx}. "
                 "Example: 012 means training model on 3 gpus."
             ),
             flag=False,
@@ -129,7 +129,7 @@ class TrainCommand(Command):
         cuda = self.option("cuda-devices")
         if cuda is None or cuda == "-1":
             return [-1]
-        return [int(cuda) for idx in list(cuda)]
+        return [int(cuda) for idx in re.findall(r"\d+", cuda, flags=re.I)]
 
     def parse_tags(self) -> List[str]:
         tags = self.option("tags")
