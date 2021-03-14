@@ -123,9 +123,11 @@ class InfoVAEKLLoss(KLLoss):
 
     def _compute_rbf(self, x1: torch.Tensor, x2: torch.Tensor, eps: float = 1e-13) -> torch.Tensor:
         """Computes the RBF Kernel between x1 and x2 tensors."""
+        # x1 ~ (batch size, 1, hidden)
         z_dim = x2.size(-1) if x1.dim() == 3 else x2.size(-2) + x2.size(-1)
         sigma = 2.0 * z_dim * self._prior.std
-        numerator = -(x1 - x2).pow(2).view(x1.size(0), x1.size(1), -1)
+        # size(0) because as a result of x1-x2 we get (batch size, batch size, ...) tensor
+        numerator = -(x1 - x2).pow(2).view(x1.size(0), x1.size(0), -1)
         # result ~ (batch size, batch_size)
         result = torch.exp(numerator.mean(-1) / sigma)
         return result
