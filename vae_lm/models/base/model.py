@@ -10,7 +10,7 @@ from .losses import LabelSmoothingNLL
 from .torch_module import TorchModule
 import vae_lm.nn.utils as util
 from vae_lm.nn.kl_loss import KLLoss
-from vae_lm.nn.kl_scheduler import KLScheduler
+from vae_lm.nn.weight_scheduler import WeightScheduler
 from torch_nlp_utils.common import Registrable, Params
 from vae_lm.training.metrics import Perplexity, Average
 
@@ -49,7 +49,9 @@ class VAELmModel(TorchModule, Registrable):
         when constructing embedding matrices or output classifiers (as the vocabulary holds the
         number of classes in your output, also), and translating model output into human-readable
         form.
-    kl_scheduler : `KLScheduler`, required
+    recon_scheduler : `WeightScheduler`, required
+        Scheduler for Reconstruction Error part.
+    kl_scheduler : `WeightScheduler`, required
         Scheduler for KL part.
     kl_loss : `KLLoss`, required
         KLLoss module to compute KL-Divergence part.
@@ -72,7 +74,8 @@ class VAELmModel(TorchModule, Registrable):
     def __init__(
         self,
         vocab: Vocabulary,
-        kl_scheduler: KLScheduler,
+        recon_scheduler: WeightScheduler,
+        kl_scheduler: WeightScheduler,
         kl_loss: KLLoss,
         iwae: bool = False,
         recon_weight: float = 1.0,
@@ -81,6 +84,7 @@ class VAELmModel(TorchModule, Registrable):
         super().__init__()
         self._vocab = vocab
         self._iwae = iwae
+        self._recon_scheduler = recon_scheduler
         self._kl_scheduler = kl_scheduler
         self._kl_loss = kl_loss
         self._recon_weight = recon_weight
@@ -88,7 +92,10 @@ class VAELmModel(TorchModule, Registrable):
         self._loss = LabelSmoothingNLL(label_smoothing, size_average=False)
         # Metrics
         self._perplexity = Perplexity()
-        self._avgs = {metric: Average() for metric in ["avg-kl-weight", "avg-kl", "avg-nll"]}
+        self._avgs = {
+            metric: Average()
+            for metric in ["avg-recon-weight", "avg-nll", "avg-kl-weight", "avg-kl"]
+        }
 
     @property
     def nsamples_posterior(self) -> int:
@@ -96,7 +103,7 @@ class VAELmModel(TorchModule, Registrable):
 
     @property
     def is_kl_used(self) -> bool:
-        return self._kl_scheduler.kl_weight != 0
+        return self._kl_scheduler.weight != 0
 
     def forward(
         self,
@@ -140,14 +147,16 @@ class VAELmModel(TorchModule, Registrable):
             for x, tensor in self._kl_loss(
                 posterior_log_prob,
                 prior_log_prob,
-                kl_weight=self._kl_scheduler.kl_weight,
                 latent=latent.z,
             ).items()
         }
         # kl_loss ~ (batch size, samples)
         kl_loss = kl_loss_output.pop("batch-loss")
         # batch_loss ~ (batch size, samples)
-        batch_loss = self._recon_weight * recon_error + kl_loss
+        batch_loss = (
+            self._recon_scheduler.weight * recon_error
+            + self._kl_scheduler.weight * kl_loss
+        )
         if self._iwae:
             # weights ~ (batch size, samples)
             weights = batch_loss.softmax(dim=-1)
@@ -156,10 +165,14 @@ class VAELmModel(TorchModule, Registrable):
         # Step KL Scheduler and recompute KL weight for training
         if not manual_kl_step and self.training:
             self.kl_scheduler_step()
+        # Step Reconstruction Error Scheduler
+        if self.training:
+            self._recon_scheduler.step()
         # Construct output dictionary
         output_dict = {
             "loss_info": {
-                "kl-weight": self._kl_scheduler.kl_weight,
+                "recon-weight": self._recon_scheduler.weight,
+                "kl-weight": self._kl_scheduler.weight,
                 "batch-kl": kl_loss.mean(),
                 "batch-nll": recon_error.mean(),
                 "batch-loss": batch_loss.mean(),
@@ -174,9 +187,10 @@ class VAELmModel(TorchModule, Registrable):
         mean_kl_loss = kl_loss.mean()
         self._perplexity(mean_recon_error)
         for item, value in [
-            ("avg-kl-weight", self._kl_scheduler.kl_weight),
-            ("avg-kl", mean_kl_loss),
+            ("avg-recon-weight", self._recon_scheduler.weight),
             ("avg-nll", mean_recon_error),
+            ("avg-kl-weight", self._kl_scheduler.weight),
+            ("avg-kl", mean_kl_loss),
         ]:
             self._avgs[item](value)
         return output_dict

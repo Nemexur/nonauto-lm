@@ -5,7 +5,7 @@ import vae_lm.nn.utils as util
 from overrides import overrides
 from vae_lm.nn.kl_loss import KLLoss
 from torch_nlp_utils.data import Vocabulary
-from vae_lm.nn.kl_scheduler import KLScheduler
+from vae_lm.nn.weight_scheduler import WeightScheduler
 from vae_lm.models.base import (
     VAELmModel, PriorSample, PosteriorSample, Embedder, LatentSample
 )
@@ -27,15 +27,15 @@ class AutoModel(VAELmModel):
         posterior: Posterior,
         prior: Prior,
         kl_loss: KLLoss,
-        kl_scheduler: KLScheduler,
-        recon_weight: float = 1.0,
+        recon_scheduler: WeightScheduler,
+        kl_scheduler: WeightScheduler,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__(
             vocab=vocab,
             kl_loss=kl_loss,
+            recon_scheduler=recon_scheduler,
             kl_scheduler=kl_scheduler,
-            recon_weight=recon_weight,
             label_smoothing=label_smoothing,
         )
         self._embedder = embedder
@@ -210,7 +210,8 @@ class AutoModel(VAELmModel):
         posterior = Posterior.from_params(**params.pop("posterior"))
         prior = Prior.from_params(**params.pop("prior"))
         kl_loss = KLLoss.from_params(prior=prior, **params.pop("kl_loss"))
-        kl_scheduler = KLScheduler.from_params(**params.pop("kl_scheduler"))
+        recon_scheduler = WeightScheduler.from_params(**params.pop("recon_scheduler"))
+        kl_scheduler = WeightScheduler.from_params(**params.pop("kl_scheduler"))
         return cls(
             vocab=vocab,
             embedder=embedder,
@@ -219,6 +220,7 @@ class AutoModel(VAELmModel):
             posterior=posterior,
             prior=prior,
             kl_loss=kl_loss,
+            recon_scheduler=recon_scheduler,
             kl_scheduler=kl_scheduler,
             **params
         )

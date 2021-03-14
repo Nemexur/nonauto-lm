@@ -1,3 +1,4 @@
+from typing import Dict
 import torch
 from overrides import overrides
 from torch_nlp_utils.common import Registrable
@@ -23,9 +24,8 @@ class KLLoss(Registrable, TorchModule):
         self,
         posterior_log_prob: torch.Tensor,
         prior_log_prob: torch.Tensor,
-        kl_weight: float,
         **kwargs,
-    ) -> torch.Tensor:
+    ) -> Dict[str, torch.Tensor]:
         # posterior_log_prob ~ (batch size)
         # prior_log_prob ~ (batch size)
         raise NotImplementedError()
@@ -39,15 +39,14 @@ class DefaultKLLoss(KLLoss):
         self,
         posterior_log_prob: torch.Tensor,
         prior_log_prob: torch.Tensor,
-        kl_weight: float,
         **kwargs,
-    ) -> torch.Tensor:
+    ) -> Dict[str, torch.Tensor]:
         # posterior_log_prob ~ (batch size)
         # prior_log_prob ~ (batch size)
         loss = posterior_log_prob - prior_log_prob
         # Adding free bits to KL-Divergence
         loss = self._free_bits_kl(loss)
-        return {"loss": kl_weight * loss}
+        return {"loss": loss}
 
 
 @KLLoss.register("info-vae")
@@ -77,17 +76,17 @@ class InfoVAEKLLoss(KLLoss):
         self,
         posterior_log_prob: torch.Tensor,
         prior_log_prob: torch.Tensor,
-        kl_weight: float,
+        latent: torch.Tensor,
         **kwargs,
-    ) -> torch.Tensor:
+    ) -> Dict[str, torch.Tensor]:
         # posterior_log_prob ~ (batch size)
         # prior_log_prob ~ (batch size)
+        # latent ~ (batch size, hidden size) for auto, (batch size, seq length, hidden size) for nonauto
         # Extract extra variables
-        z = kwargs["latent"]
         batch_size = posterior_log_prob.size(0)
         kl_loss = posterior_log_prob - prior_log_prob
         # mmd_loss ~ (batch size)
-        mmd_loss = self._compute_mmd(z)
+        mmd_loss = self._compute_mmd(latent)
         bias_corr = batch_size * (batch_size - 1)
         # loss ~ (batch size)
         loss = (
@@ -96,7 +95,7 @@ class InfoVAEKLLoss(KLLoss):
         )
         # Adding free bits to KL-Divergence
         loss = self._free_bits_kl(loss)
-        return {"loss": kl_weight * loss, "mmd-part": mmd_loss, "kl-part": kl_loss}
+        return {"loss": loss, "mmd-part": mmd_loss, "kl-part": kl_loss}
 
     def _compute_mmd(self, z: torch.Tensor) -> torch.Tensor:
         # Sample from prior distribution
