@@ -50,15 +50,11 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
     train_dataloader = DataIterator(
         train_dataset,
         collate_fn=CollateBatch.by_name(dataset_type),
-        drop_last=True,
-        shuffle=True,
         **config["data_loader"],
     )
     valid_dataloader = DataIterator(
         valid_dataset,
         collate_fn=CollateBatch.by_name(dataset_type),
-        shuffle=True,
-        drop_last=True,
         **config["data_loader"],
     )
     # Construct modules
@@ -74,7 +70,7 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
         local_rank=process_rank,
         world_size=world_size,
         serialization_dir=config["serialization_dir"],
-        use_wandb=config.get("use_wandb", False),
+        use_wandb=config.pop("use_wandb", False),
         **config.pop("trainer"),
     )
     # Let setup get ready for all workers.

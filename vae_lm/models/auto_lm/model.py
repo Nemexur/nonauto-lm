@@ -29,6 +29,7 @@ class AutoModel(VAELmModel):
         kl_loss: KLLoss,
         recon_scheduler: WeightScheduler,
         kl_scheduler: WeightScheduler,
+        iwae: bool = False,
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__(
@@ -36,6 +37,7 @@ class AutoModel(VAELmModel):
             kl_loss=kl_loss,
             recon_scheduler=recon_scheduler,
             kl_scheduler=kl_scheduler,
+            iwae=iwae,
             label_smoothing=label_smoothing,
         )
         self._embedder = embedder
