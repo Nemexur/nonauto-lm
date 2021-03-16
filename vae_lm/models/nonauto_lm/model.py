@@ -1,5 +1,6 @@
 from typing import List, Tuple, Dict, Type, T, Iterable
 import torch
+from einops import repeat
 from itertools import chain
 import vae_lm.nn.utils as util
 from overrides import overrides
@@ -184,7 +185,10 @@ class NonAutoModel(VAELmModel):
         """
         encoded = self.encode(src_tokens)
         latent, posterior_log_prob = self.sample_from_posterior(encoded, random=True)
-        return self._posterior.calc_mutual_info(latent.z, posterior_log_prob, mask=encoded.mask)
+        encoded_mask = repeat(
+            encoded.mask, "batch seq -> (batch samples) seq", samples=self.nsamples_posterior
+        )
+        return self._posterior.calc_mutual_info(latent.z, posterior_log_prob, mask=encoded_mask)
 
     @overrides
     def encoder_parameters(self) -> Iterable[torch.nn.Parameter]:
