@@ -5,6 +5,7 @@ import wandb
 import torch
 import random
 import shutil
+import logging
 import tarfile
 import tempfile
 import numpy as np
@@ -17,6 +18,7 @@ from rich.logging import RichHandler
 from contextlib import contextmanager
 import vae_lm.training.ddp as ddp
 from torch_nlp_utils.common import Params
+
 # Modules
 from vae_lm.models.base import VAELmModel
 
@@ -56,23 +58,17 @@ def archive_model(
     # Check weights
     weights_file = weights / "model.pt"
     if not weights_file.exists():
-        logger.error(
-            f"weights file {weights_file} does not exist, unable to archive model."
-        )
+        logger.error(f"weights file {weights_file} does not exist, unable to archive model.")
         return
     # Check metrics
     metrics_file = weights / METRICS_NAME
     if not metrics_file.exists():
-        logger.error(
-            f"metrics file {metrics_file} does not exist, unable to archive model."
-        )
+        logger.error(f"metrics file {metrics_file} does not exist, unable to archive model.")
         return
     # Check config
     config_file = serialization_dir / CONFIG_NAME
     if not config_file.exists():
-        logger.error(
-            f"config file {config_file} does not exist, unable to archive model."
-        )
+        logger.error(f"config file {config_file} does not exist, unable to archive model.")
     # Check archive path
     if archive_path is not None:
         archive_file = archive_path
@@ -183,7 +179,7 @@ def configure_world(func: Callable) -> Callable:
         try:
             result = func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
         except Exception as error:
-            logger.bind(type="rich").exception(error)
+            logger.exception(error)
             result = {}
         finally:
             if is_master:
@@ -213,16 +209,7 @@ def description_from_metrics(metrics: Dict[str, float]) -> str:
     metrics = deepcopy(metrics)
     # Configure loss first
     loss = f"loss: {metrics.pop('loss'):.4f}, "
-    return (
-        loss
-        + ", ".join(
-            [
-                f"{name}: {value:.4f}"
-                for name, value in metrics.items()
-            ]
-        )
-        + " ||"
-    )
+    return loss + ", ".join([f"{name}: {value:.4f}" for name, value in metrics.items()]) + " ||"
 
 
 def log_metrics(
@@ -247,7 +234,8 @@ def log_metrics(
     """
     logger.info(
         f"{mode_str}: info -- {', '.join([f'{k}: {v}'.lower() for k, v in info.items()])}"
-        if info is not None else f"{mode_str}"
+        if info is not None
+        else f"{mode_str}"
     )
     max_length = max(len(x) for x in metrics)
     # Sort by length to make it prettier
@@ -267,4 +255,4 @@ def setup_logging() -> None:
 
         return filter
 
-    logger.add(RichHandler(rich_tracebacks=True), filter=make_filter("rich"), format="{message}")
+    logger.add(RichHandler(rich_tracebacks=True), level=logging.ERROR, format="{message}")

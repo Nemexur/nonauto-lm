@@ -220,5 +220,5 @@ class NonAutoModel(VAELmModel):
             kl_loss=kl_loss,
             recon_scheduler=recon_scheduler,
             kl_scheduler=kl_scheduler,
-            **params
+            **params,
         )
