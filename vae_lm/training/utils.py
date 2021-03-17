@@ -186,7 +186,7 @@ def configure_world(func: Callable) -> Callable:
                 serialization_dir = Path(config["serialization_dir"])
                 # Construct archive in distributed training there
                 # because wandb hangs in distributed training mode
-                # and we need to finish it manually then.
+                # and we also need to finish it manually.
                 best_model = serialization_dir / "best-model"
                 if best_model.exists():
                     archive_model(
@@ -247,7 +247,7 @@ def log_metrics(
 
 
 def setup_logging() -> None:
-    def make_filter(name: str):
+    def make_filter(name: str) -> Callable:
         """Function to construct filter by name for Handler messages."""
 
         def filter(record: Dict[str, Any]) -> bool:

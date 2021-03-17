@@ -129,7 +129,7 @@ class TrainCommand(Command):
         cuda = self.option("cuda-devices")
         if cuda is None or cuda == "-1":
             return [-1]
-        return [int(cuda) for idx in re.findall(r"\d+", cuda, flags=re.I)]
+        return [int(idx) for idx in re.findall(r"\d+", cuda, flags=re.I)]
 
     def parse_tags(self) -> List[str]:
         tags = self.option("tags")

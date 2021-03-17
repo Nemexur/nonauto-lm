@@ -59,10 +59,12 @@ class Trainer(ABC, Registrable):
             self._metric_patience = EarlyStopping(patience=patience, metric=validation_metric)
         else:
             self._metric_patience = None
-        self._save_checkpoint = SaveCheckpoint(
-            directory=os.path.join(serialization_dir, "models"),
-            keep_num_checkpoints=num_checkpoints
-        )
+        # Create Checkpointer saver only on master
+        if self._is_master:
+            self._save_checkpoint = SaveCheckpoint(
+                directory=os.path.join(serialization_dir, "models"),
+                keep_num_checkpoints=num_checkpoints
+            )
         self._grad_norm = grad_norm
         self._use_wandb = use_wandb
         # Watch model for wandb only on master
