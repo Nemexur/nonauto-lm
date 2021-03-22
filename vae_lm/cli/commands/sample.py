@@ -62,7 +62,9 @@ class SampleCommand(Command):
         num_samples = int(self.option("num-samples"))
         lengths = self.parse_lengths()
         samples, log_prob = archive.model.sample(num_samples, lengths)
+        # TODO: Make better output by truncating <eos> tokens
         samples = archive.model.make_output_human_readable(samples)
+        # TODO: Do not use print here
         print(samples["texts"])
 
     def parse_lengths(self) -> List[int]:
