@@ -1,9 +1,10 @@
 import os
 import torch
+from pathlib import Path
 from loguru import logger
 import torch.distributed as dist
 from torch_nlp_utils.common import Params
-from vae_lm.training.utils import configure_world, seed_everything
+from vae_lm.training.utils import configure_world, seed_everything, load_archive
 from torch_nlp_utils.data import DatasetReader, DataIterator, Vocabulary, Namespace, CollateBatch
 # Modules
 import vae_lm.nn.utils as util
@@ -60,7 +61,13 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
     # Construct modules
     logger.debug("Instantiating Modules from config.")
     device = util.int_to_device(config["cuda_devices"][process_rank])
-    model = VAELmModel.from_params(vocab=vocab, **config.pop("model")).to(device)
+    model_params = config.pop("model")
+    # Load model from the archive for finetune
+    if "from_archive" in model_params:
+        archive = load_archive(Path(model_params.get("from_archive")))
+        model = archive.model.to(device)
+    else:
+        model = VAELmModel.from_params(vocab=vocab, **model_params).to(device)
     # Instantiate Trainer
     logger.debug("Instantiating Trainer.")
     trainer = Trainer.from_params(

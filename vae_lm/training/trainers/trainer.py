@@ -3,14 +3,14 @@ import os
 import json
 import torch
 import wandb
-from loguru import logger
-import torch.distributed as dist
 import vae_lm.nn.utils as util
-from abc import ABC, abstractmethod
+import torch.distributed as dist
 import vae_lm.training.ddp as ddp
-from torch.nn.utils import clip_grad_norm_
-from torch.nn.parallel import DistributedDataParallel
 import vae_lm.training.utils as training_util
+from loguru import logger
+from abc import ABC, abstractmethod
+from torch.nn.parallel import DistributedDataParallel
+from torch.nn.utils import clip_grad_norm_, clip_grad_value_
 # Torch NLP Utils
 from torch_nlp_utils.common import Registrable
 from torch_nlp_utils.data import DataIterator, CollateBatch
@@ -34,6 +34,7 @@ class Trainer(ABC, Registrable):
         world_size: int = 1,
         patience: int = None,
         grad_norm: float = 5.0,
+        grad_clip: float = 2.0,
         validation_metric: str = "-loss",
         num_checkpoints: int = None,
     ) -> None:
@@ -66,6 +67,7 @@ class Trainer(ABC, Registrable):
                 keep_num_checkpoints=num_checkpoints
             )
         self._grad_norm = grad_norm
+        self._grad_clip = grad_clip
         self._use_wandb = use_wandb
         # Watch model for wandb only on master
         if self._use_wandb and self._is_master:
@@ -218,6 +220,7 @@ class DefaultTrainer(Trainer):
         world_size: int = 1,
         patience: int = None,
         grad_norm: float = 5.0,
+        grad_clip: float = 2.0,
         validation_metric: str = "-loss",
         num_checkpoints: int = None,
     ) -> None:
@@ -232,6 +235,7 @@ class DefaultTrainer(Trainer):
             world_size=world_size,
             patience=patience,
             grad_norm=grad_norm,
+            grad_clip=grad_clip,
             validation_metric=validation_metric,
             num_checkpoints=num_checkpoints,
         )
@@ -249,6 +253,8 @@ class DefaultTrainer(Trainer):
         # Gradient Clipping
         if self._grad_norm is not None:
             clip_grad_norm_(self._model.parameters(), self._grad_norm)
+        if self._grad_clip is not None:
+            clip_grad_value_(self._model.parameters(), self._grad_clip)
         self._scheduler.step()
         self._optimizer.step()
         self._optimizer.zero_grad()

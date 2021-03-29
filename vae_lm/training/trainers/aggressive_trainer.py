@@ -7,8 +7,8 @@ from functools import partial
 import torch.distributed as dist
 import vae_lm.nn.utils as util
 import vae_lm.training.ddp as ddp
-from torch.nn.utils import clip_grad_norm_
 import vae_lm.training.utils as training_util
+from torch.nn.utils import clip_grad_norm_, clip_grad_value_
 from torch_nlp_utils.data import DataIterator, CollateBatch
 # Modules
 from vae_lm.models.base import VAELmModel
@@ -40,6 +40,7 @@ class AggressiveTrainer(Trainer):
         world_size: int = 1,
         patience: int = None,
         grad_norm: float = 5.0,
+        grad_clip: float = 2.0,
         validation_metric: str = "-loss",
         num_checkpoints: int = None,
         max_aggressive_iters: int = 100,
@@ -56,6 +57,7 @@ class AggressiveTrainer(Trainer):
             world_size=world_size,
             patience=patience,
             grad_norm=grad_norm,
+            grad_clip=grad_clip,
             validation_metric=validation_metric,
             num_checkpoints=num_checkpoints,
         )
@@ -89,6 +91,8 @@ class AggressiveTrainer(Trainer):
             # Gradient Clipping
             if self._grad_norm is not None:
                 clip_grad_norm_(self._model.parameters(), self._grad_norm)
+            if self._grad_clip is not None:
+                clip_grad_value_(self._model.parameters(), self._grad_clip)
             # Update only encoder
             self._encoder_optimizer.step()
             self._encoder_optimizer.zero_grad()
@@ -108,6 +112,8 @@ class AggressiveTrainer(Trainer):
         # Gradient Clipping
         if self._grad_norm is not None:
             clip_grad_norm_(self._model.parameters(), self._grad_norm)
+        if self._grad_clip is not None:
+            clip_grad_value_(self._model.parameters(), self._grad_clip)
         # Update encoder if we aggressive training stopped and we don't use KL
         if not self._aggressive or not self._model.is_kl_used:
             self._encoder_scheduler.step()

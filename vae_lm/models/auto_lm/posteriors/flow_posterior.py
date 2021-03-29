@@ -38,7 +38,7 @@ class FlowPosterior(Posterior):
         # z ~ (batch size, seq length, hidden size)
         # mask ~ (batch size, seq length)
         output = z
-        sum_log_det = output.new_zeros(*output.size()[:-1])
+        sum_log_det = output.new_zeros(output.size(0))
         for flow in self._flows[::-1]:
             # output ~ (batch size, seq length, hidden size)
             # log_det ~ (batch size)
