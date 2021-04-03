@@ -11,10 +11,12 @@ from loguru import logger
 from abc import ABC, abstractmethod
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils import clip_grad_norm_, clip_grad_value_
+
 # Torch NLP Utils
 from torch_nlp_utils.common import Registrable
 from torch_nlp_utils.data import DataIterator, CollateBatch
 from torch_nlp_utils.callbacks import EarlyStopping, SaveCheckpoint
+
 # Modules
 from vae_lm.nn.optimizer import Optimizer
 from vae_lm.nn.lr_scheduler import LRScheduler
@@ -64,7 +66,7 @@ class Trainer(ABC, Registrable):
         if self._is_master:
             self._save_checkpoint = SaveCheckpoint(
                 directory=os.path.join(serialization_dir, "models"),
-                keep_num_checkpoints=num_checkpoints
+                keep_num_checkpoints=num_checkpoints,
             )
         self._grad_norm = grad_norm
         self._grad_clip = grad_clip
@@ -92,8 +94,18 @@ class Trainer(ABC, Registrable):
     def _validate_batch(self, batch: CollateBatch) -> Dict[str, Any]:
         pass
 
+    @abstractmethod
+    def _enrich_metrics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def _get_save_dict(self, **extra_params) -> Dict[str, Any]:
+        pass
+
     @ddp.on_epoch_end
-    def _run_epoch(self, dataloader_tqdm: Iterable[CollateBatch], for_training: bool = True) -> float:
+    def _run_epoch(
+        self, dataloader_tqdm: Iterable[CollateBatch], for_training: bool = True
+    ) -> float:
         num_batches = 0
         total_loss = 0
         batch_outputs = self._train_batch if for_training else self._validate_batch
@@ -118,7 +130,7 @@ class Trainer(ABC, Registrable):
             dist.barrier()
         metrics = self._model.get_metrics(reset=True)
         metrics["loss"] = epoch_loss
-        metrics["lr"] = self._scheduler.get_last_lr()[0]
+        metrics = self._enrich_metrics(metrics)
         return metrics
 
     def train(
@@ -137,7 +149,7 @@ class Trainer(ABC, Registrable):
                     mode_str="Training",
                     info={"epoch": epoch},
                     metrics=train_metrics,
-                    log_to_wandb=self._use_wandb
+                    log_to_wandb=self._use_wandb,
                 )
             # Validation
             logger.info("Validation")
@@ -149,12 +161,7 @@ class Trainer(ABC, Registrable):
                 self._save_checkpoint(
                     validation_metrics,
                     is_best_so_far=self._metric_patience.improved if self._metric_patience else True,
-                    save_dict={
-                        "model": self._model.state_dict(),
-                        "optimizer": self._optimizer.state_dict(),
-                        "scheduler": self._scheduler.state_dict(),
-                        **validation_metrics
-                    },
+                    save_dict=self._get_save_dict(**validation_metrics),
                 )
             # Wait for master process to save new checkpoint
             if self._distributed:
@@ -181,9 +188,7 @@ class Trainer(ABC, Registrable):
             mutual_info = self._model.calc_mutual_info(src_tokens).item()
             mi += mutual_info
             num_examples += 1
-            dataloader_tqdm.set_description(
-                f"mutual-info: {mi / num_examples:.4f}", refresh=False
-            )
+            dataloader_tqdm.set_description(f"mutual-info: {mi / num_examples:.4f}", refresh=False)
         return mi / num_examples
 
     @torch.no_grad()
@@ -200,7 +205,9 @@ class Trainer(ABC, Registrable):
         metrics["mutual-info"] = current_mi
         # Log metrics only on master
         if self._is_master:
-            training_util.log_metrics(mode_str=desc, info=info, metrics=metrics, log_to_wandb=self._use_wandb)
+            training_util.log_metrics(
+                mode_str=desc, info=info, metrics=metrics, log_to_wandb=self._use_wandb
+            )
         return metrics
 
 
@@ -209,10 +216,14 @@ class DefaultTrainer(Trainer):
     def __init__(
         self,
         model: VAELmModel,
-        optimizer: Optimizer,
-        scheduler: LRScheduler,
         epochs: int,
         serialization_dir: str,
+        optimizer: Optimizer = None,
+        scheduler: LRScheduler = None,
+        encoder_optimizer: Optimizer = None,
+        decoder_optimizer: Optimizer = None,
+        encoder_scheduler: LRScheduler = None,
+        decoder_scheduler: LRScheduler = None,
         use_wandb: bool = True,
         distributed: bool = False,
         cuda_device: Union[int, torch.device] = -1,
@@ -241,6 +252,18 @@ class DefaultTrainer(Trainer):
         )
         self._optimizer = optimizer
         self._scheduler = scheduler
+        if (encoder_optimizer is not None) ^ (decoder_optimizer is not None):
+            raise ValueError(
+                "Both encoder_optimizer and decoder_optimizer should be specified not one of them."
+            )
+        if (encoder_scheduler is not None) ^ (decoder_scheduler is not None):
+            raise ValueError(
+                "Both encoder_scheduler and decoder_scheduler should be specified not one of them."
+            )
+        self._encoder_optimizer = encoder_optimizer
+        self._decoder_optimizer = decoder_optimizer
+        self._encoder_scheduler = encoder_scheduler
+        self._decoder_scheduler = decoder_scheduler
 
     @ddp.on_batch_start
     def _train_batch(self, batch: CollateBatch) -> Dict[str, Any]:
@@ -255,17 +278,20 @@ class DefaultTrainer(Trainer):
             clip_grad_norm_(self._model.parameters(), self._grad_norm)
         if self._grad_clip is not None:
             clip_grad_value_(self._model.parameters(), self._grad_clip)
-        self._scheduler.step()
-        self._optimizer.step()
-        self._optimizer.zero_grad()
+        # Update step
+        self._perform_one_step()
         metrics = self._model.get_metrics()
         metrics["batch-loss"] = loss.item()
         # Add metrics from output dict
-        metrics.update({
-            k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()
-        })
+        metrics.update(
+            {k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()}
+        )
         # Add Learning rate
-        metrics["lr"] = self._scheduler.get_last_lr()[0]
+        if self._encoder_scheduler is not None:
+            metrics["encoder_lr"] = self._encoder_scheduler.get_last_lr()[0]
+            metrics["decoder_lr"] = self._decoder_scheduler.get_last_lr()[0]
+        else:
+            metrics["lr"] = self._scheduler.get_last_lr()[0]
         return metrics
 
     @ddp.on_batch_start
@@ -278,12 +304,61 @@ class DefaultTrainer(Trainer):
         metrics = self._model.get_metrics()
         metrics["batch-loss"] = loss.item()
         # Add metrics from output dict
-        metrics.update({
-            k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()
-        })
+        metrics.update(
+            {k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()}
+        )
         # Add Learning rate
-        metrics["lr"] = self._scheduler.get_last_lr()[0]
+        if self._encoder_scheduler is not None:
+            metrics["encoder_lr"] = self._encoder_scheduler.get_last_lr()[0]
+            metrics["decoder_lr"] = self._decoder_scheduler.get_last_lr()[0]
+        else:
+            metrics["lr"] = self._scheduler.get_last_lr()[0]
         return metrics
+
+    def _enrich_metrics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        if self._encoder_scheduler is not None:
+            metrics["encoder_lr"] = self._encoder_scheduler.get_last_lr()[0]
+            metrics["decoder_lr"] = self._decoder_scheduler.get_last_lr()[0]
+        else:
+            metrics["lr"] = self._scheduler.get_last_lr()[0]
+        return metrics
+
+    def _get_save_dict(self, **extra_params) -> Dict[str, Any]:
+        save_dict = {
+            "model": self._model.state_dict(),
+            **extra_params,
+        }
+        if self._encoder_scheduler is not None:
+            save_dict["encoder_scheduler"] = self._encoder_scheduler.state_dict()
+            save_dict["decoder_scheduler"] = self._decoder_scheduler.state_dict()
+        else:
+            save_dict["scheduler"] = self._scheduler.state_dict()
+        if self._encoder_optimizer is not None:
+            save_dict["encoder_optimizer"] = self._encoder_optimizer.state_dict()
+            save_dict["decoder_optimizer"] = self._decoder_optimizer.state_dict()
+        else:
+            save_dict["optimizer"] = self._optimizer.state_dict()
+        return save_dict
+
+    def _perform_one_step(self) -> None:
+        # Use separate schedulers if specified
+        # If encoder or decoder is not None
+        # then both of them passed according to init condition.
+        if self._encoder_scheduler is not None:
+            self._encoder_scheduler.step()
+            self._decoder_scheduler.step()
+        else:
+            self._scheduler.step()
+        # If encoder or decoder is not None
+        # then both of them passed according to init condition.
+        if self._encoder_optimizer is not None:
+            self._encoder_optimizer.step()
+            self._decoder_optimizer.step()
+            self._encoder_optimizer.zero_grad()
+            self._decoder_optimizer.zero_grad()
+        else:
+            self._optimizer.step()
+            self._optimizer.zero_grad()
 
     @classmethod
     def from_params(
@@ -291,11 +366,25 @@ class DefaultTrainer(Trainer):
         model: VAELmModel,
         **params,
     ) -> T:
-        optimizer = Optimizer.from_params(params=model.parameters(), **params.pop("optimizer"))
-        scheduler = LRScheduler.from_params(optimizer=optimizer, **params.pop("scheduler"))
-        return cls(
-            model=model,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            **params
-        )
+        if "optimizer" in params:
+            params["optimizer"] = Optimizer.from_params(
+                params=model.parameters(), **params.pop("optimizer")
+            )
+            params["scheduler"] = LRScheduler.from_params(
+                optimizer=params["optimizer"], **params.pop("scheduler")
+            )
+        if "encoder_optimizer" in params:
+            params["encoder_optimizer"] = Optimizer.from_params(
+                params=model.encoder_parameters(), **params.pop("encoder_optimizer")
+            )
+            params["encoder_scheduler"] = LRScheduler.from_params(
+                optimizer=params["encoder_optimizer"], **params.pop("encoder_scheduler")
+            )
+        if "decoder_optimizer" in params:
+            params["decoder_optimizer"] = Optimizer.from_params(
+                params=model.decoder_parameters(), **params.pop("decoder_optimizer")
+            )
+            params["decoder_scheduler"] = LRScheduler.from_params(
+                optimizer=params["decoder_optimizer"], **params.pop("decoder_scheduler")
+            )
+        return cls(model=model, **params)

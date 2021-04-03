@@ -18,8 +18,11 @@ class Average(Metric):
         _total_value = list(util.unwrap_to_tensors(value))[0]
         _count = 1
         if util.dist_available():
-            count = torch.tensor(_count, device=value.device)
-            total_value = torch.tensor(_total_value, device=value.device)
+            device = util.int_to_device(
+                -1 if dist.get_backend() != "nccl" else torch.cuda.current_device()
+            )
+            count = torch.tensor(_count, device=device)
+            total_value = torch.tensor(_total_value, device=device)
             # Reduce from all processes
             dist.all_reduce(count, op=dist.ReduceOp.SUM)
             dist.all_reduce(total_value, op=dist.ReduceOp.SUM)

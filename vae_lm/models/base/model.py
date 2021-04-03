@@ -165,7 +165,7 @@ class VAELmModel(TorchModule, Registrable):
         # Step KL Scheduler and recompute KL weight for training
         if not manual_kl_step and self.training:
             self.kl_scheduler_step()
-        # Step Reconstruction Error Scheduler
+        # Step Reconstruction Error Scheduler always during training
         if self.training:
             self._recon_scheduler.step()
         # Construct output dictionary
