@@ -22,7 +22,7 @@ class AdamOptimizer(Optimizer, torch.optim.Adam):
         eps: float = 1e-08,
         weight_decay: float = 0.0,
         amsgrad: bool = False,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,
@@ -45,7 +45,7 @@ class SparseAdamOptimizer(Optimizer, torch.optim.SparseAdam):
         lr: float = 0.001,
         betas: Tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-08,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,
@@ -67,7 +67,7 @@ class AdamaxOptimizer(Optimizer, torch.optim.Adamax):
         betas: Tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-08,
         weight_decay: float = 0.0,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,
@@ -91,7 +91,7 @@ class AdamWOptimizer(Optimizer, torch.optim.AdamW):
         eps: float = 1e-08,
         weight_decay: float = 0.01,
         amsgrad: bool = False,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,
@@ -116,7 +116,7 @@ class AdagradOptimizer(Optimizer, torch.optim.Adagrad):
         weight_decay: float = 0.0,
         initial_accumulator_value: float = 0.0,
         eps: float = 1e-10,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,
@@ -140,7 +140,7 @@ class AdadeltaOptimizer(Optimizer, torch.optim.Adadelta):
         rho: float = 0.9,
         eps: float = 1e-06,
         weight_decay: float = 0.0,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,
@@ -164,7 +164,7 @@ class SgdOptimizer(Optimizer, torch.optim.SGD):
         dampening: float = 0,
         weight_decay: float = 0.0,
         nesterov: bool = False,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,
@@ -190,7 +190,7 @@ class RmsPropOptimizer(Optimizer, torch.optim.RMSprop):
         weight_decay: float = 0.0,
         momentum: float = 0.0,
         centered: bool = False,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,
@@ -216,7 +216,7 @@ class AveragedSgdOptimizer(Optimizer, torch.optim.ASGD):
         alpha: float = 0.75,
         t0: float = 1000000.0,
         weight_decay: float = 0.0,
-    ):
+    ) -> None:
         super().__init__(
             params=params,
             lr=lr,

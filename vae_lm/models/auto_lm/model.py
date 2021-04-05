@@ -140,8 +140,7 @@ class AutoModel(VAELmModel):
             mask : `torch.Tensor`
                 Mask for sampled tensor.
         """
-        z = self._prior.sample(samples)
-        z, log_prob = self._posterior.backward(z)
+        z, log_prob = self._prior.sample(samples)
         return PriorSample(z, log_prob, None)
 
     @overrides

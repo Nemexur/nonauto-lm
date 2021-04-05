@@ -110,7 +110,10 @@ class Trainer(ABC, Registrable):
         total_loss = 0
         batch_outputs = self._train_batch if for_training else self._validate_batch
         for batch in dataloader_tqdm:
-            metrics, done_early = batch_outputs(batch)
+            try:
+                metrics, done_early = batch_outputs(batch)
+            except Exception as error:
+                raise training_util.TorchBatchError(message=str(error), batch=batch.as_dict())
             total_loss += metrics["batch-loss"]
             num_batches += 1
             if done_early:

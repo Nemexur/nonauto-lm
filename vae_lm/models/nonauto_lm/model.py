@@ -133,9 +133,7 @@ class NonAutoModel(VAELmModel):
             mask : `torch.Tensor`
                 Mask for sampled tensor.
         """
-        z, mask = self._prior.sample(samples, lengths)
-        z, log_prob = self._posterior.backward(z, mask=mask)
-        return PriorSample(z, log_prob, mask)
+        return PriorSample(*self._prior.sample(samples, lengths))
 
     @overrides
     def sample_from_posterior(

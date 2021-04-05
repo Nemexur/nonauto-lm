@@ -1,11 +1,10 @@
-from typing import NamedTuple, Dict, Callable, Union, Any
+from typing import NamedTuple, Dict, Callable, Union
 import os
 import json
 import wandb
 import torch
 import random
 import shutil
-import logging
 import tarfile
 import tempfile
 import numpy as np
@@ -14,7 +13,6 @@ from loguru import logger
 from copy import deepcopy
 from functools import wraps
 import torch.distributed as dist
-from rich.logging import RichHandler
 from contextlib import contextmanager
 import vae_lm.training.ddp as ddp
 from torch_nlp_utils.common import Params
@@ -26,6 +24,20 @@ from vae_lm.models.base import VAELmModel
 CONFIG_NAME = "config.json"
 WEIGHTS_NAME = "weights.pt"
 METRICS_NAME = "metrics.json"
+
+
+class TorchBatchError(Exception):
+    """
+    This exception is raised during any batch processing.
+    It has an attribute `batch` to get a tensor that raised an error.
+    """
+
+    def __init__(self, message: str, batch: torch.Tensor):
+        self.message = message
+        self.batch = batch
+
+    def __str__(self):
+        return repr(self.message)
 
 
 class Archive(NamedTuple):
@@ -179,7 +191,10 @@ def configure_world(func: Callable) -> Callable:
         try:
             result = func(process_rank=process_rank, config=config, world_size=world_size, **kwargs)
         except Exception as error:
-            logger.exception(error)
+            # If it is a TorchBatchError then save it for convenience
+            if isinstance(error, TorchBatchError):
+                logger.bind(batch=error.batch).debug("Saving batch that caused an error")
+            logger.error(error)
             result = {}
         finally:
             if is_master:
@@ -244,15 +259,3 @@ def log_metrics(
         logger.info(f"{metric.ljust(max_length)} | {metric_value:.4f}")
     if log_to_wandb:
         wandb.log({f"{mode_str.lower()}/{k}": v for k, v in metrics.items()})
-
-
-def setup_logging() -> None:
-    def make_filter(name: str) -> Callable:
-        """Function to construct filter by name for Handler messages."""
-
-        def filter(record: Dict[str, Any]) -> bool:
-            return record["extra"].get("type") == name
-
-        return filter
-
-    logger.add(RichHandler(rich_tracebacks=True), level=logging.ERROR, format="{message}")

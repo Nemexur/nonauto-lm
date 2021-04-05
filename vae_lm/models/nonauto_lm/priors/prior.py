@@ -34,9 +34,11 @@ class Prior(TorchModule, Registrable):
 
         Returns
         -------
-        `Tuple[torch.Tensor, torch.Tensor]`
+        `Tuple[torch.Tensor, torch.Tensor, torch.Tensor]`
             z : `torch.Tensor`
                 Sampled latent codes.
+            log_prob : `torch.Tensor`
+                Log probability of samples latent codes.
             mask : `torch.Tensor`
                 Mask for sampled latent codes based on lengths.
         """
@@ -54,6 +56,29 @@ class Prior(TorchModule, Registrable):
             Sampled latent codes.
         mask : `torch.Tensor`, optional (default = `None`)
             Mask for sampled z.
+        """
+        raise NotImplementedError()
+
+    def masked_log_prob(
+        self,
+        latent: torch.Tensor,
+        mask: torch.Tensor,
+        size_average: bool = False
+    ) -> torch.Tensor:
+        """
+        Compute lob probability of a tensor with mask.
+
+        Parameters
+        ----------
+        latent : `torch.Tensor`, required
+            Sampled latent codes.
+        mask : `torch.Tensor`, required
+            Mask for latent codes.
+
+        Returns
+        -------
+        `torch.Tensor`
+            Log probability of a tensor.
         """
         raise NotImplementedError()
 
@@ -82,7 +107,7 @@ class DefaultPrior(Prior):
         batch: int,
         lengths: List[int],
         samples: int = 1,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         lengths = torch.LongTensor(lengths)
         if lengths.size(0) == 1:
             lengths = lengths.expand(batch)
@@ -102,17 +127,31 @@ class DefaultPrior(Prior):
         epsilon = rearrange(epsilon, "batch samples seq size -> (batch samples) seq size")
         # mask ~ (batch size * samples, max length)
         mask = repeat(mask, "batch seq -> (batch samples) seq", samples=samples)
-        return epsilon, mask
+        log_prob = self.masked_log_prob(epsilon, mask, size_average=True)
+        return epsilon, log_prob, mask
 
     @overrides
-    def log_probability(self, latent: LatentSample, mask: torch.Tensor = None) -> torch.Tensor:
+    def log_probability(
+        self,
+        posterior_sample: LatentSample,
+        mask: torch.Tensor = None
+    ) -> torch.Tensor:
         # Log prior probability calculation based on formula from Kingma paper
         # log_pi_part = math.log(2 * math.pi)
         # square_mu_part = latent.mu**2
         # square_sigma_part = latent.sigma**2
         # log_prob = -0.5 * (log_pi_part + square_mu_part + square_sigma_part)
         # Log prior probability calculation if we sample only one latent code from q(z)
-        log_prob = self.base_dist.log_prob(latent.z)
+        return self.masked_log_prob(posterior_sample.z, mask, size_average=True)
+
+    @overrides
+    def masked_log_prob(
+        self,
+        latent: torch.Tensor,
+        mask: torch.Tensor,
+        size_average: bool = False
+    ) -> torch.Tensor:
+        log_prob = self.base_dist.log_prob(latent)
         if mask is not None:
             log_prob = log_prob * mask.unsqueeze(-1)
         # Sum over all dimensions except batch

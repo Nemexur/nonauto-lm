@@ -30,8 +30,9 @@ class Prior(TorchModule, Registrable):
 
         Returns
         -------
-        `torch.Tensor`
-            Sampled latent codes.
+        `Tuple[torch.Tensor, torch.Tensor]`
+            1. Sampled latent codes.
+            2. Log probability
         """
         raise NotImplementedError()
 
@@ -45,8 +46,6 @@ class Prior(TorchModule, Registrable):
         ----------
         latent : `LatentSample`, required
             Sampled latent codes.
-        mask : `torch.Tensor`, optional (default = `None`)
-            Mask for sampled z.
         """
         raise NotImplementedError()
 
@@ -79,10 +78,11 @@ class DefaultPrior(Prior):
         epsilon = self.base_dist.sample((batch, samples))
         # epsilon ~ (batch size * samples, features)
         epsilon = rearrange(epsilon, "batch samples size -> (batch samples) size")
-        return epsilon
+        log_prob = torch.einsum("b...->b", self.base_dist.log_prob(epsilon))
+        return epsilon, log_prob
 
     @overrides
-    def log_probability(self, latent: LatentSample) -> torch.Tensor:
+    def log_probability(self, posterior_sample: LatentSample) -> torch.Tensor:
         # Log prior probability calculation based on formula from Kingma paper
         # log_pi_part = math.log(2 * math.pi)
         # square_mu_part = latent.mu**2
@@ -90,4 +90,4 @@ class DefaultPrior(Prior):
         # log_prob = -0.5 * (log_pi_part + square_mu_part + square_sigma_part)
         # Log prior probability calculation if we sample only one latent code from q(z)
         # Sum over all dimensions except batch
-        return torch.einsum("b...->b", self.base_dist.log_prob(latent.z))
+        return torch.einsum("b...->b", self.base_dist.log_prob(posterior_sample.z))

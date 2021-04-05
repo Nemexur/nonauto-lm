@@ -1,5 +1,5 @@
 from .application import Application
-from vae_lm.training.utils import setup_logging
+from vae_lm.utils import setup_logging
 
 
 def main():

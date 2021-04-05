@@ -129,7 +129,7 @@ class LabelSmoothingNLL(torch.nn.Module):
         self,
         logits: torch.Tensor,
         target: torch.Tensor,
-        weights: torch.FloatTensor
+        weights: torch.FloatTensor,
     ) -> torch.Tensor:
         # logits ~ (batch size, sequence length, num_classes)
         # target ~ (batch size, sequence length)
