@@ -38,8 +38,6 @@ class FlowPrior(DefaultPrior):
     ) -> Tuple[LatentSample, torch.Tensor]:
         # z0 ~ (batch size, seq length, hidden size)
         z = z0
-        # log_prob ~ (batch size)
-        log_prob = torch.einsum("b...->b", self.base_dist.log_prob(z0))
         # sum_log_det ~ (batch size)
         sum_log_det = z.new_zeros(z.size(0))
         for flow in self._flows:
@@ -47,6 +45,8 @@ class FlowPrior(DefaultPrior):
             # log_det ~ (batch size)
             z, log_det = flow(z)
             sum_log_det += log_det
+        # log_prob ~ (batch size)
+        log_prob = torch.einsum("b...->b", self.base_dist.log_prob(z))
         return z, log_prob + sum_log_det
 
     def backward_pass(self, z0: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

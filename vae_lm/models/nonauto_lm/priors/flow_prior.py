@@ -40,8 +40,6 @@ class FlowPrior(DefaultPrior):
         # z0 ~ (batch size, seq length, hidden size)
         # mask ~ (batch size, seq length)
         z = z0
-        # log_prob ~ (batch size)
-        log_prob = self.masked_log_prob(z0, mask, size_average=True)
         # sum_log_det ~ (batch size)
         sum_log_det = z.new_zeros(z.size(0))
         for flow in self._flows:
@@ -49,6 +47,8 @@ class FlowPrior(DefaultPrior):
             # log_det ~ (batch size)
             z, log_det = flow(z, mask)
             sum_log_det += log_det
+        # log_prob ~ (batch size)
+        log_prob = self.masked_log_prob(z, mask, size_average=True)
         return z, log_prob + sum_log_det
 
     def backward_pass(
