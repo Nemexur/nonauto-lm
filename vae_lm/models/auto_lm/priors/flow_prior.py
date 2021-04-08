@@ -18,7 +18,7 @@ class FlowPrior(DefaultPrior):
         batch: int,
         samples: int = 1,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        epsilon = super().sample(batch, samples)
+        epsilon, _ = super().sample(batch, samples)
         z, log_prob = self.backward_pass(epsilon)
         return z, log_prob
 

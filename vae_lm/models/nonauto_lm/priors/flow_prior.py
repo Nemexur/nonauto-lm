@@ -18,10 +18,10 @@ class FlowPrior(DefaultPrior):
         batch: int,
         lengths: List[int],
         samples: int = 1,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        epsilon, mask = super().sample(batch, lengths, samples)
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        epsilon, _, mask = super().sample(batch, lengths, samples)
         z, log_prob = self.backward_pass(epsilon, mask)
-        return z, log_prob
+        return z, log_prob, mask
 
     @overrides
     def log_probability(self, posterior_sample: LatentSample, mask: torch.Tensor = None) -> torch.Tensor:

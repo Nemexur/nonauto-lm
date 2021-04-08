@@ -175,6 +175,7 @@ def configure_world(func: Callable) -> Callable:
     def wrapper(process_rank: int, config: Params, world_size: int = 1, **kwargs) -> None:
         is_master = process_rank == 0
         use_wandb = config.get("use_wandb", False)
+        serialization_dir = Path(config["serialization_dir"])
         # Setup world for Distributed Training
         if world_size > 1:
             ddp.setup_world(process_rank, world_size, backend=dist.Backend.NCCL)
@@ -193,12 +194,13 @@ def configure_world(func: Callable) -> Callable:
         except Exception as error:
             # If it is a TorchBatchError then save it for convenience
             if isinstance(error, TorchBatchError):
-                logger.bind(batch=error.batch).debug("Saving batch that caused an error")
+                logger.bind(batch=error.batch, serialization_dir=serialization_dir).debug(
+                    "Saving batch that caused an error"
+                )
             logger.error(error)
             result = {}
         finally:
             if is_master:
-                serialization_dir = Path(config["serialization_dir"])
                 # Construct archive in distributed training there
                 # because wandb hangs in distributed training mode
                 # and we also need to finish it manually.

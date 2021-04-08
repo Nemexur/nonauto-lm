@@ -33,7 +33,7 @@ class RealNVP(Flow):
         self._input_size = input_size
         self._s_net = FeedForward(
             input_size=input_size // 2,
-            num_layers=3,
+            num_layers=len(hidden_sizes),
             hidden_sizes=hidden_sizes,
             activations=Activation.by_name(activation),
             dropout=0.2,
@@ -41,7 +41,7 @@ class RealNVP(Flow):
         )
         self._t_net = FeedForward(
             input_size=input_size // 2,
-            num_layers=3,
+            num_layers=len(hidden_sizes),
             hidden_sizes=hidden_sizes,
             activations=Activation.by_name(activation),
             dropout=0.2,
