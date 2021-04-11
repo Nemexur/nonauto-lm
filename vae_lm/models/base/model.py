@@ -11,6 +11,7 @@ from .torch_module import TorchModule
 import vae_lm.nn.utils as util
 from vae_lm.nn.kl_loss import KLLoss
 from vae_lm.nn.weight_scheduler import WeightScheduler
+from torch_nlp_utils.data import DataIterator
 from torch_nlp_utils.common import Registrable, Params
 from vae_lm.training.metrics import Perplexity, Average
 
@@ -368,6 +369,19 @@ class VAELmModel(TorchModule, Registrable):
     def decoder_parameters(self) -> Iterable[torch.nn.Parameter]:
         """Return parameters for decoder: p(x|z)."""
         raise NotImplementedError()
+
+    # TODO: Need a better solution
+    @staticmethod
+    def prepare_with_iterator(config: Params, iterator: DataIterator) -> Params:
+        """
+        Prepare params with DataIterator.
+        It is definitely a crutch so we need to come up with better solution.
+        """
+        for key in filter(lambda x: "scheduler" in x, config):
+            value = config[key]
+            if value.get("type") == "cyclic":
+                value["num_training_steps"] = len(iterator)
+        return config
 
     @classmethod
     def load(

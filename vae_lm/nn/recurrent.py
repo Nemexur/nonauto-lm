@@ -1,7 +1,7 @@
 from typing import Tuple
 import torch
-from vae_lm.models.base import TorchModule
 from torch_nlp_utils.common import Registrable
+from vae_lm.models.base.torch_module import TorchModule
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 

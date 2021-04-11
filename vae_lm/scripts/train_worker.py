@@ -63,6 +63,7 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
     device = util.int_to_device(config["cuda_devices"][process_rank])
     model_params = config.pop("model")
     # Load model from the archive for finetune
+    model_params = VAELmModel.prepare_with_iterator(model_params, iterator=train_dataloader)
     if "from_archive" in model_params:
         archive = load_archive(Path(model_params.get("from_archive")))
         model = archive.model.to(device)
