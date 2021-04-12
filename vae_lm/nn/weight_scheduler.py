@@ -74,32 +74,34 @@ class CyclicWeightScheduler(WeightScheduler):
     ----------
     num_epochs : `int`, required
         Number of epochs in model training.
-    num_training_steps : `int`, required
-        Number of training steps inside one epoch.
-        You do not need to specify it in the config.
     zero_weight_steps : `int`, required
         Number of steps with weight 0.
+    num_training_steps : `int`, optional (default = `5000`)
+        Number of training steps inside one epoch.
+        You do not need to specify it in the config.
+        For now it is an optional parameter for sampling to work.
     start : `float`, optional (default = `0.0`)
         Starting value for the weight.
     stop : `float`, optional (default = `0.0`)
         The highest value for the weight which indicates the end of the cycle.
     num_cycles : `int`, optional (default = `4`)
         Number of annealing cycles during training.
-    ratio : `float`, optional (deafult = `0.5`)
-        Indicates how sharp the drop after the cycle would be. It should be greater than 0.
-        It if is really close to 0 consider it like a normal linear annealing.
-        If it is close to 1 then the slope to the `stop` value would become flatter.
+    window : `float`, optional (deafult = `0.5`)
+        Indicates how sharp the drop after the cycle would be aka `window`.
+        It should be greater than 0. It if is really close to 0 consider it
+        like a normal linear annealing. If it is close to 1 then the slope
+        to the `stop` value would become flatter.
     """
 
     def __init__(
         self,
         num_epochs: int,
-        num_training_steps: int,
         zero_weight_steps: int,
+        num_training_steps: int = 5000,
         start: float = 0.0,
         stop: float = 1.0,
         num_cycles: int = 4,
-        ratio: float = 0.5,
+        window: float = 0.5,
     ) -> None:
         self._step = 0
         self._idx = -1
@@ -111,7 +113,7 @@ class CyclicWeightScheduler(WeightScheduler):
         self._start = start
         self._stop = stop
         self._num_cycles = num_cycles
-        self._ratio = ratio
+        self._window = window
         self._prepare()
 
     @property
@@ -123,7 +125,7 @@ class CyclicWeightScheduler(WeightScheduler):
         num_iterations = self._num_iterations - self._zero_weight_steps
         self._weights = np.ones(num_iterations) * self._stop
         period = num_iterations / self._num_cycles
-        step = (self._stop - self._start) / (period * self._ratio)
+        step = (self._stop - self._start) / (period * self._window)
 
         for cycle in range(self._num_cycles):
             start_, i = self._start, 0

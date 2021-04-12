@@ -1,130 +1,128 @@
-from torch.optim import Optimizer
+from typing import Dict, Any, List
+import torch
 from torch_nlp_utils.common import Registrable
 
 
 class LRScheduler(Registrable):
-    def __init__(self, optimizer, last_epoch=-1):
-        if not isinstance(optimizer, Optimizer):
-            raise TypeError("{} is not an Optimizer".format(type(optimizer).__name__))
+    """Base class for Learning Rate Scheduler."""
+    def __init__(
+        self, optimizer: torch.optim.Optimizer, param_group_field: str = "lr", last_step: int = -1
+    ) -> None:
         self.optimizer = optimizer
-        if last_epoch == -1:
-            for group in optimizer.param_groups:
-                group.setdefault("initial_lr", group["lr"])
-            last_epoch = 0
+        self.param_group_field = param_group_field
+        self._initial_param_group_field = f"initial_{param_group_field}"
+        if last_step == -1:
+            for i, group in enumerate(self.optimizer.param_groups):
+                if param_group_field not in group:
+                    raise KeyError(f"{param_group_field} missing from param_groups[{i}]")
+                group.setdefault(self._initial_param_group_field, group[param_group_field])
         else:
-            for i, group in enumerate(optimizer.param_groups):
-                if "initial_lr" not in group:
+            for i, group in enumerate(self.optimizer.param_groups):
+                if self._initial_param_group_field not in group:
                     raise KeyError(
-                        "param 'initial_lr' is not specified "
-                        "in param_groups[{}] when resuming an optimizer".format(i)
+                        f"{self._initial_param_group_field} missing from param_groups[{i}]"
                     )
-        self.base_lrs = list(map(lambda group: group["initial_lr"], optimizer.param_groups))
+        self.base_values = [
+            group[self._initial_param_group_field] for group in self.optimizer.param_groups
+        ]
+        self.last_step = last_step
 
-    def state_dict(self):
-        """Returns the state of the scheduler as a :class:`dict`.
-
-        It contains an entry for every variable in self.__dict__ which
-        is not the optimizer.
-        """
+    def state_dict(self) -> Dict[str, Any]:
+        """Returns the state of the scheduler as a `dict`."""
         return {key: value for key, value in self.__dict__.items() if key != "optimizer"}
 
-    def load_state_dict(self, state_dict):
-        """Loads the schedulers state.
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        """
+        Load the schedulers state.
 
-        Arguments:
-            state_dict (dict): scheduler state. Should be an object returned
-                from a call to :meth:`state_dict`.
+        Parameters
+        ----------
+        state_dict : `Dict[str, Any]`, required
+            Scheduler state. Should be an object returned from a call to `state_dict`.
         """
         self.__dict__.update(state_dict)
 
-    def get_lr(self):
-        raise NotImplementedError
+    def get_values(self) -> List[float]:
+        raise NotImplementedError()
 
-    def get_last_lr(self):
-        return self._last_lr
-
-    def step(self, epoch=None):
-        if epoch is None:
-            epoch = self.last_epoch + 1
-        self.last_epoch = epoch
-        for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
-            param_group["lr"] = lr
-        self._last_lr = [group["lr"] for group in self.optimizer.param_groups]
+    def step(self) -> None:
+        self.last_step += 1
+        for param_group, value in zip(self.optimizer.param_groups, self.get_values()):
+            param_group[self.param_group_field] = value
 
 
 @LRScheduler.register("dummy")
 class DummyScheduler(LRScheduler):
     """Stub learning rate scheduler that do not update lr for Optimizer."""
 
-    def get_lr(self):
-        return self.base_lrs
-
-    def step(self, epoch=None) -> None:
-        self._last_lr = [group["lr"] for group in self.optimizer.param_groups]
+    def get_values(self) -> List[float]:
+        return self.base_values
 
 
-@LRScheduler.register("inverse_square_root")
-class InverseSquareRootScheduler(LRScheduler):
-    """
-    Decay the LR based on the inverse square root of the update number.
-    We also support a warmup phase where we linearly increase the learning rate
-    from zero until the configured learning rate (``--lr``).
-    Thereafter we decay proportional to the number of
-    updates, with a decay factor set to align with the configured learning rate.
-    During warmup::
-      lrs = torch.linspace(0, args.lr, args.warmup_updates)
-      lr = lrs[update_num]
-    After warmup::
-      decay_factor = args.lr * sqrt(args.warmup_updates)
-      lr = decay_factor / sqrt(update_num)
-    """
-
-    def __init__(self, optimizer, warmup_steps, init_lr, last_epoch=-1):
-        assert warmup_steps > 0, "warmup steps should be larger than 0."
-        super().__init__(optimizer, last_epoch)
-        self.warmup_steps = float(warmup_steps)
+@LRScheduler.register("warmup")
+class LRSchedulerWithWarmup(LRScheduler):
+    def __init__(
+        self,
+        optimizer: torch.optim.Optimizer,
+        init_lr: float,
+        warmup_steps: int,
+        last_step: int = -1,
+    ) -> None:
+        super().__init__(optimizer, last_step=last_step)
         self.init_lr = init_lr
-        self.lr_steps = [(base_lr - init_lr) / warmup_steps for base_lr in self.base_lrs]
-        self.decay_factor = self.warmup_steps ** 0.5
-        if last_epoch == -1:
-            last_epoch = 0
-        self.step(last_epoch)
+        self.warmup_steps = warmup_steps
+        self.lr_steps = [(base_value - init_lr) / warmup_steps for base_value in self.base_values]
 
-    def get_lr(self):
-        if self.last_epoch < self.warmup_steps:
-            return [self.init_lr + lr_step * self.last_epoch for lr_step in self.lr_steps]
+    def get_values(self) -> None:
+        if self.last_step < self.warmup_steps:
+            return [self.init_lr + lr_step * self.last_step for lr_step in self.lr_steps]
         else:
-            lr_factor = self.decay_factor * self.last_epoch ** -0.5
-            return [base_lr * lr_factor for base_lr in self.base_lrs]
+            return self.after_warmup()
+
+    def after_warmup(self) -> List[float]:
+        return self.base_values
 
 
-@LRScheduler.register("exp")
-class ExponentialScheduler(LRScheduler):
-    """Set the learning rate of each parameter group to the initial lr decayed
-    by gamma every epoch. When last_epoch=-1, sets initial lr as lr.
-    We also support a warmup phase where we linearly increase the learning rate
-    from zero until the configured learning rate (``--lr``).
-    Args:
-        optimizer (Optimizer): Wrapped optimizer.
-        gamma (float): Multiplicative factor of learning rate decay.
-        warmup_steps (int): Warmup steps..
-        last_epoch (int): The index of last epoch. Default: -1.
-    """
+@LRScheduler.register("inverse-square-root")
+class InverseSquareRootScheduler(LRSchedulerWithWarmup):
+    def __init__(
+        self,
+        optimizer: torch.optim.Optimizer,
+        init_lr: float,
+        warmup_steps: int,
+        last_step: int = -1,
+    ) -> None:
+        super().__init__(
+            optimizer=optimizer,
+            init_lr=init_lr,
+            warmup_steps=warmup_steps,
+            last_step=last_step,
+        )
+        self._decay_factor = self.warmup_steps ** 0.5
 
-    def __init__(self, optimizer, gamma, warmup_steps, init_lr, last_epoch=-1):
-        super().__init__(optimizer, last_epoch)
-        self.gamma = gamma
-        # handle warmup <= 0
-        self.warmup_steps = max(1, warmup_steps)
-        self.init_lr = init_lr
-        self.lr_steps = [(base_lr - init_lr) / self.warmup_steps for base_lr in self.base_lrs]
-        if last_epoch == -1:
-            last_epoch = 0
-        self.step(last_epoch)
+    def after_warmup(self) -> List[float]:
+        lr_factor = self._decay_factor * self.last_step ** -0.5
+        return [value * lr_factor for value in self.base_values]
 
-    def get_lr(self):
-        if self.last_epoch < self.warmup_steps:
-            return [self.init_lr + lr_step * self.last_epoch for lr_step in self.lr_steps]
-        else:
-            lr_factor = self.gamma ** (self.last_epoch - self.warmup_steps)
-            return [base_lr * lr_factor for base_lr in self.base_lrs]
+
+@LRScheduler.register("exponential")
+class ExponentialScheduler(LRSchedulerWithWarmup):
+    def __init__(
+        self,
+        optimizer: torch.optim.Optimizer,
+        init_lr: float,
+        warmup_steps: int,
+        gamma: float,
+        last_step: int = -1,
+    ) -> None:
+        super().__init__(
+            optimizer=optimizer,
+            init_lr=init_lr,
+            warmup_steps=warmup_steps,
+            last_step=last_step,
+        )
+        self._gamma = gamma
+
+    def after_warmup(self) -> List[float]:
+        lr_factor = self._gamma ** (self.last_step - self.warmup_steps)
+        return [value * lr_factor for value in self.base_values]
