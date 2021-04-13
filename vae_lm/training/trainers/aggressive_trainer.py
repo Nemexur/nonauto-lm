@@ -137,8 +137,8 @@ class AggressiveTrainer(Trainer):
             k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()
         })
         # Add Learning rate
-        metrics["encoder-lr"] = self._encoder_scheduler.get_last_lr()[0]
-        metrics["decoder-lr"] = self._decoder_scheduler.get_last_lr()[0]
+        metrics["encoder-lr"] = self._encoder_scheduler.get_current_lr()[0]
+        metrics["decoder-lr"] = self._decoder_scheduler.get_current_lr()[0]
         return metrics
 
     @ddp.on_batch_start
@@ -155,8 +155,8 @@ class AggressiveTrainer(Trainer):
             k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()
         })
         # Add Learning rate
-        metrics["encoder-lr"] = self._encoder_scheduler.get_last_lr()[0]
-        metrics["decoder-lr"] = self._decoder_scheduler.get_last_lr()[0]
+        metrics["encoder-lr"] = self._encoder_scheduler.get_current_lr()[0]
+        metrics["decoder-lr"] = self._decoder_scheduler.get_current_lr()[0]
         return metrics
 
     @ddp.on_epoch_end
@@ -196,8 +196,8 @@ class AggressiveTrainer(Trainer):
             dist.barrier()
         metrics = self._model.get_metrics(reset=True)
         metrics["loss"] = epoch_loss
-        metrics["encoder-lr"] = self._encoder_scheduler.get_last_lr()[0]
-        metrics["decoder-lr"] = self._decoder_scheduler.get_last_lr()[0]
+        metrics["encoder-lr"] = self._encoder_scheduler.get_current_lr()[0]
+        metrics["decoder-lr"] = self._decoder_scheduler.get_current_lr()[0]
         return metrics
 
     def train(
@@ -382,8 +382,8 @@ class LazyAggressiveTrainer(AggressiveTrainer):
             k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()
         })
         # Add Learning rate
-        metrics["encoder-lr"] = self._encoder_scheduler.get_last_lr()[0]
-        metrics["decoder-lr"] = self._decoder_scheduler.get_last_lr()[0]
+        metrics["encoder-lr"] = self._encoder_scheduler.get_current_lr()[0]
+        metrics["decoder-lr"] = self._decoder_scheduler.get_current_lr()[0]
         return metrics
 
     @ddp.on_epoch_end
@@ -416,6 +416,6 @@ class LazyAggressiveTrainer(AggressiveTrainer):
             dist.barrier()
         metrics = self._model.get_metrics(reset=True)
         metrics["loss"] = epoch_loss
-        metrics["encoder-lr"] = self._encoder_scheduler.get_last_lr()[0]
-        metrics["decoder-lr"] = self._decoder_scheduler.get_last_lr()[0]
+        metrics["encoder-lr"] = self._encoder_scheduler.get_current_lr()[0]
+        metrics["decoder-lr"] = self._decoder_scheduler.get_current_lr()[0]
         return metrics

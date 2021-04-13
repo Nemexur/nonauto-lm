@@ -45,6 +45,9 @@ class LRScheduler(Registrable):
     def get_values(self) -> List[float]:
         raise NotImplementedError()
 
+    def get_current_lr(self) -> List[float]:
+        return [param_group[self.param_group_field] for param_group in self.optimizer.param_groups]
+
     def step(self) -> None:
         self.last_step += 1
         for param_group, value in zip(self.optimizer.param_groups, self.get_values()):

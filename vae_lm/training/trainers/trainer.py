@@ -291,10 +291,10 @@ class DefaultTrainer(Trainer):
         )
         # Add Learning rate
         if self._encoder_scheduler is not None:
-            metrics["encoder_lr"] = self._encoder_scheduler.get_last_lr()[0]
-            metrics["decoder_lr"] = self._decoder_scheduler.get_last_lr()[0]
+            metrics["encoder_lr"] = self._encoder_scheduler.get_current_lr()[0]
+            metrics["decoder_lr"] = self._decoder_scheduler.get_current_lr()[0]
         else:
-            metrics["lr"] = self._scheduler.get_last_lr()[0]
+            metrics["lr"] = self._scheduler.get_current_lr()[0]
         return metrics
 
     @ddp.on_batch_start
@@ -312,18 +312,18 @@ class DefaultTrainer(Trainer):
         )
         # Add Learning rate
         if self._encoder_scheduler is not None:
-            metrics["encoder_lr"] = self._encoder_scheduler.get_last_lr()[0]
-            metrics["decoder_lr"] = self._decoder_scheduler.get_last_lr()[0]
+            metrics["encoder_lr"] = self._encoder_scheduler.get_current_lr()[0]
+            metrics["decoder_lr"] = self._decoder_scheduler.get_current_lr()[0]
         else:
-            metrics["lr"] = self._scheduler.get_last_lr()[0]
+            metrics["lr"] = self._scheduler.get_current_lr()[0]
         return metrics
 
     def _enrich_metrics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
         if self._encoder_scheduler is not None:
-            metrics["encoder_lr"] = self._encoder_scheduler.get_last_lr()[0]
-            metrics["decoder_lr"] = self._decoder_scheduler.get_last_lr()[0]
+            metrics["encoder_lr"] = self._encoder_scheduler.get_current_lr()[0]
+            metrics["decoder_lr"] = self._decoder_scheduler.get_current_lr()[0]
         else:
-            metrics["lr"] = self._scheduler.get_last_lr()[0]
+            metrics["lr"] = self._scheduler.get_current_lr()[0]
         return metrics
 
     def _get_save_dict(self, **extra_params) -> Dict[str, Any]:

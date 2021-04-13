@@ -196,7 +196,9 @@ class AutoModel(VAELmModel):
     @overrides
     def encoder_parameters(self) -> Iterable[torch.nn.Parameter]:
         """Return parameters for encoder: `q(z|x)`."""
-        return chain(self._encoder.parameters(), self._posterior.parameters())
+        return chain(
+            self._encoder.parameters(), self._posterior.parameters(), self._prior.parameters()
+        )
 
     @overrides
     def decoder_parameters(self) -> Iterable[torch.nn.Parameter]:

@@ -194,7 +194,7 @@ def configure_world(func: Callable) -> Callable:
         except Exception as error:
             # If it is a TorchBatchError then save it for convenience
             if isinstance(error, TorchBatchError):
-                logger.bind(batch=error.batch, serialization_dir=serialization_dir).debug(
+                logger.bind(batch=error.batch, serialization_dir=serialization_dir.stem).debug(
                     "Saving batch that caused an error"
                 )
             logger.error(error)
