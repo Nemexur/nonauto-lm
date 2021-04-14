@@ -13,9 +13,10 @@ from loguru import logger
 from copy import deepcopy
 from functools import wraps
 import torch.distributed as dist
-from contextlib import contextmanager
 import vae_lm.training.ddp as ddp
+from contextlib import contextmanager
 from torch_nlp_utils.common import Params
+from vae_lm.utils.base import run_on_rank_zero
 
 # Modules
 from vae_lm.models.base import VAELmModel
@@ -41,7 +42,7 @@ class TorchBatchError(Exception):
 
 
 class Archive(NamedTuple):
-    """ An archive comprises a Model and its experimental config with metrics"""
+    """An archive comprises a Model and its experimental config with metrics."""
 
     model: VAELmModel
     config: Params
@@ -173,7 +174,9 @@ def configure_world(func: Callable) -> Callable:
 
     @wraps(func)
     def wrapper(process_rank: int, config: Params, world_size: int = 1, **kwargs) -> None:
+        # Set info related to process rank
         is_master = process_rank == 0
+        os.environ["LOCAL_RANK"] = str(process_rank)
         use_wandb = config.get("use_wandb", False)
         serialization_dir = Path(config["serialization_dir"])
         # Setup world for Distributed Training
@@ -182,6 +185,7 @@ def configure_world(func: Callable) -> Callable:
         # Run wandb in master process
         # TODO: Think about config unflat for wandb sweep to work for hyperparameters optimization.
         if is_master and use_wandb:
+            logger.use_wandb = True
             wandb.init(
                 project=os.getenv("WANDB_PROJECT_NAME"),
                 config=config.as_flat_dict(),
@@ -194,9 +198,9 @@ def configure_world(func: Callable) -> Callable:
         except Exception as error:
             # If it is a TorchBatchError then save it for convenience
             if isinstance(error, TorchBatchError):
-                logger.bind(batch=error.batch, serialization_dir=serialization_dir.stem).debug(
-                    "Saving batch that caused an error"
-                )
+                logger.bind(
+                    batch=error.batch, serialization_dir=serialization_dir.stem, message=str(error)
+                ).debug("Saving batch that caused an error")
             logger.error(error)
             result = {}
         finally:
@@ -229,11 +233,11 @@ def description_from_metrics(metrics: Dict[str, float]) -> str:
     return loss + ", ".join([f"{name}: {value:.4f}" for name, value in metrics.items()]) + " ||"
 
 
+@run_on_rank_zero
 def log_metrics(
     mode_str: str,
     metrics: Dict[str, float],
     info: Dict[str, Union[float, int, str]] = None,
-    log_to_wandb: bool = False,
 ) -> None:
     """
     Pretty log metrics and sort them by length and alphabetic order.
@@ -246,8 +250,6 @@ def log_metrics(
         Dictionary of metrics.
     info : `Dict[str, Union[float, int, str]]`, optional (default = `None`)
         Info to additionally log after and epoch.
-    log_to_wandb: `bool`, optional (default = `False`)
-        Whether to log to Weights & Biases or not.
     """
     logger.info(
         f"{mode_str}: info -- {', '.join([f'{k}: {v}'.lower() for k, v in info.items()])}"
@@ -259,5 +261,6 @@ def log_metrics(
     for metric in sorted(metrics, key=lambda x: (len(x), x)):
         metric_value = metrics.get(metric)
         logger.info(f"{metric.ljust(max_length)} | {metric_value:.4f}")
-    if log_to_wandb:
-        wandb.log({f"{mode_str.lower()}/{k}": v for k, v in metrics.items()})
+    logger.bind(metrics={f"{mode_str.lower()}/{k}": v for k, v in metrics.items()}).debug(
+        "Logging metrics to additional sources."
+    )

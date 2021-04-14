@@ -2,7 +2,6 @@ from typing import Iterable, Dict, Any, Union, Type, T
 import os
 import json
 import torch
-import wandb
 import vae_lm.nn.utils as util
 import torch.distributed as dist
 import vae_lm.training.ddp as ddp
@@ -29,7 +28,6 @@ class Trainer(ABC, Registrable):
         model: VAELmModel,
         epochs: int,
         serialization_dir: str,
-        use_wandb: bool = True,
         distributed: bool = False,
         cuda_device: Union[int, torch.device] = -1,
         local_rank: int = 0,
@@ -70,10 +68,6 @@ class Trainer(ABC, Registrable):
             )
         self._grad_norm = grad_norm
         self._grad_clip = grad_clip
-        self._use_wandb = use_wandb
-        # Watch model for wandb only on master
-        if self._use_wandb and self._is_master:
-            wandb.watch(model)
 
     @property
     def cuda_device(self) -> int:
@@ -146,14 +140,12 @@ class Trainer(ABC, Registrable):
             self._pytorch_model.train()
             logger.info("Training")
             train_metrics = self._fit(train_dataloader)
-            # Log metrics only on master
-            if self._is_master:
-                training_util.log_metrics(
-                    mode_str="Training",
-                    info={"epoch": epoch},
-                    metrics=train_metrics,
-                    log_to_wandb=self._use_wandb,
-                )
+            # Log metrics only on master with run_on_rank_zero decorator
+            training_util.log_metrics(
+                mode_str="Training",
+                info={"epoch": epoch},
+                metrics=train_metrics,
+            )
             # Validation
             logger.info("Validation")
             validation_metrics = self.evaluate(validation_dataloader, info={"epoch": epoch})
@@ -206,11 +198,8 @@ class Trainer(ABC, Registrable):
         # Calculate mutual info
         current_mi = self.calc_mutual_info(dataloader)
         metrics["mutual-info"] = current_mi
-        # Log metrics only on master
-        if self._is_master:
-            training_util.log_metrics(
-                mode_str=desc, info=info, metrics=metrics, log_to_wandb=self._use_wandb
-            )
+        # Log metrics only on master with run_on_rank_zero decorator
+        training_util.log_metrics(mode_str=desc, info=info, metrics=metrics)
         return metrics
 
 
@@ -227,7 +216,6 @@ class DefaultTrainer(Trainer):
         decoder_optimizer: Optimizer = None,
         encoder_scheduler: LRScheduler = None,
         decoder_scheduler: LRScheduler = None,
-        use_wandb: bool = True,
         distributed: bool = False,
         cuda_device: Union[int, torch.device] = -1,
         local_rank: int = 0,
@@ -242,7 +230,6 @@ class DefaultTrainer(Trainer):
             model=model,
             epochs=epochs,
             serialization_dir=serialization_dir,
-            use_wandb=use_wandb,
             distributed=distributed,
             cuda_device=cuda_device,
             local_rank=local_rank,

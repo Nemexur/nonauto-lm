@@ -33,7 +33,6 @@ class AggressiveTrainer(Trainer):
         decoder_scheduler: LRScheduler,
         epochs: int,
         serialization_dir: str,
-        use_wandb: bool = True,
         distributed: bool = False,
         cuda_device: Union[int, torch.device] = -1,
         local_rank: int = 0,
@@ -50,7 +49,6 @@ class AggressiveTrainer(Trainer):
             model=model,
             epochs=epochs,
             serialization_dir=serialization_dir,
-            use_wandb=use_wandb,
             distributed=distributed,
             cuda_device=cuda_device,
             local_rank=local_rank,
@@ -211,14 +209,12 @@ class AggressiveTrainer(Trainer):
             self._pytorch_model.train()
             logger.info("Training")
             train_metrics = self._fit(train_dataloader)
-            # Log metrics only on master
-            if self._is_master:
-                training_util.log_metrics(
-                    mode_str="Training",
-                    info={"epoch": epoch, "aggressive": self._aggressive},
-                    metrics=train_metrics,
-                    log_to_wandb=self._use_wandb,
-                )
+            # Log metrics only on master with run_on_rank_zero decorator
+            training_util.log_metrics(
+                mode_str="Training",
+                info={"epoch": epoch, "aggressive": self._aggressive},
+                metrics=train_metrics,
+            )
             # Validation
             logger.info("Validation")
             validation_metrics = self.evaluate(
@@ -306,7 +302,6 @@ class LazyAggressiveTrainer(AggressiveTrainer):
         decoder_scheduler: LRScheduler,
         epochs: int,
         serialization_dir: str,
-        use_wandb: bool = True,
         distributed: bool = False,
         cuda_device: Union[int, torch.device] = -1,
         local_rank: int = 0,
@@ -326,7 +321,6 @@ class LazyAggressiveTrainer(AggressiveTrainer):
             decoder_scheduler=decoder_scheduler,
             epochs=epochs,
             serialization_dir=serialization_dir,
-            use_wandb=use_wandb,
             distributed=distributed,
             cuda_device=cuda_device,
             local_rank=local_rank,

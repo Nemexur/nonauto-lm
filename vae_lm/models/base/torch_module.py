@@ -3,8 +3,10 @@ This file is adopted from PyTorch Lightning repo to simplify access to model dev
 Copyright to the PyTorch Lightning authors.
 """
 
+from typing import Any
 import torch
 from overrides import overrides
+from vae_lm.utils.base import wandb_watch
 
 
 class DeviceDtypeModuleMixin(torch.nn.Module):
@@ -100,6 +102,10 @@ class TorchModule(DeviceDtypeModuleMixin):
     Default PyTorch Module which adds additional properties
     and functions to get inputs and outputs sizes.
     """
+
+    @wandb_watch()
+    def __call__(self, *args, **kwargs) -> Any:
+        return super().__call__(*args, **kwargs)
 
     def get_input_size(self) -> int:
         return None
