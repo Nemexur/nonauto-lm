@@ -3,16 +3,16 @@ import os
 import re
 import json
 import wandb
-import shutil
 from pathlib import Path
 from loguru import logger
+from .command import BaseCommand
+from cleo import option, argument
 import vae_lm.training.ddp as ddp
 from torch_nlp_utils.common import Params
-from cleo import option, argument, Command
 from vae_lm.scripts.train_worker import train_worker
 
 
-class TrainCommand(Command):
+class TrainCommand(BaseCommand):
     name = "train"
     description = "Train FlowSeq model for unconditional text generation."
     arguments = [argument("config", description="Config to use for model training.")]
@@ -77,24 +77,7 @@ class TrainCommand(Command):
         config = Params.from_file(self.argument("config"), ext_vars=extra_vars)
         # Add serialization directory to config and create it
         serialization_dir = Path(self.option("serialization-dir"))
-        if serialization_dir.exists():
-            confirmed = self.confirm(
-                f"Serialization directory at path `{serialization_dir}` already exists. Delete it?",
-                default=True,
-            )
-            if confirmed:
-                shutil.rmtree(serialization_dir)
-                self.line("Directory successfully deleted!", style="info")
-                serialization_dir.mkdir(exist_ok=False)
-            else:
-                self.add_style("warning", fg="yellow", options=["bold"])
-                self.line(
-                    "Working with current serialization directory then. "
-                    "Probably you know what you are doing.",
-                    style="warning",
-                )
-        else:
-            serialization_dir.mkdir(exist_ok=False)
+        self.prepare_directory(serialization_dir)
         # Log config to console and save
         logger.info(
             "Config: {}".format(json.dumps(config.as_flat_dict(), indent=2, ensure_ascii=False))

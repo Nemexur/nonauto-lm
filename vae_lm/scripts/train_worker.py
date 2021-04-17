@@ -81,6 +81,7 @@ def train_worker(process_rank: int, config: Params, world_size: int = 1) -> None
         use_wandb=config.pop("use_wandb", False),
         **config.pop("trainer"),
     )
+    print(trainer._construct_samples_dataframe())
     # Let setup get ready for all workers.
     if is_distributed:
         dist.barrier()

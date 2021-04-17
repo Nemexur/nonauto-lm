@@ -4,6 +4,7 @@ from pathlib import Path
 from einops import repeat
 from collections import OrderedDict
 from torch_nlp_utils.data import Vocabulary
+
 # Modules
 from .encoders import EncoderOutput
 from .losses import LabelSmoothingNLL
@@ -97,6 +98,9 @@ class VAELmModel(TorchModule, Registrable):
             metric: Average()
             for metric in ["avg-recon-weight", "avg-nll", "avg-kl-weight", "avg-kl"]
         }
+        # Other
+        # TODO: EOS is hardcoded so we probably need to move it to os.enviorn or something else
+        self._end_index = self._vocab.token_to_index("<eos>")
 
     @property
     def nsamples_posterior(self) -> int:
@@ -155,8 +159,7 @@ class VAELmModel(TorchModule, Registrable):
         kl_loss = kl_loss_output.pop("batch-loss")
         # batch_loss ~ (batch size, samples)
         batch_loss = (
-            self._recon_scheduler.weight * recon_error
-            + self._kl_scheduler.weight * kl_loss
+            self._recon_scheduler.weight * recon_error + self._kl_scheduler.weight * kl_loss
         )
         if self._iwae:
             # weights ~ (batch size, samples)
@@ -342,8 +345,14 @@ class VAELmModel(TorchModule, Registrable):
         else:
             preds = output_dict["preds"]
         for sample in preds.tolist():
-            # TODO: Simplify decode in Torch NLP Utils
-            texts.append([" ".join(self._vocab.decode({namespace: x})[namespace]) for x in sample])
+            texts.append(
+                [
+                    " ".join(
+                        self._vocab.decode({namespace: x[: x.index(self._end_index)]})[namespace]
+                    )
+                    for x in sample
+                ]
+            )
         output_dict["texts"] = texts
         return output_dict
 

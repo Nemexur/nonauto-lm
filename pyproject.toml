@@ -25,6 +25,7 @@ einops = "^0.3.0"
 wandb = "^0.10.14"
 sentencepiece = "^0.1.95"
 rich = "^9.13.0"
+pandas = "^1.2.4"
 torch-nlp-utils = {git = "https://github.com/Nemexur/torch-nlp-utils.git"}
 
 [tool.poetry.dev-dependencies]

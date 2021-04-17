@@ -39,6 +39,7 @@ class wandb_watch:
         self._is_watched: bool = False
 
     def __call__(self, func: Callable) -> Callable:
+        @wraps(func)
         def wrapper(module: torch.nn.Module, *args, **kwargs) -> None:
             self._set_watch(module)
             return func(module, *args, **kwargs)

@@ -2,6 +2,7 @@ from typing import Iterable, Dict, Any, Union, Type, T
 import os
 import json
 import torch
+import pandas as pd
 import vae_lm.nn.utils as util
 import torch.distributed as dist
 import vae_lm.training.ddp as ddp
@@ -37,6 +38,7 @@ class Trainer(ABC, Registrable):
         grad_clip: float = 2.0,
         validation_metric: str = "-loss",
         num_checkpoints: int = None,
+        sampling_parameters: Dict[str, Any] = None,
     ) -> None:
         self._model = model
         self._epochs = epochs
@@ -68,6 +70,7 @@ class Trainer(ABC, Registrable):
             )
         self._grad_norm = grad_norm
         self._grad_clip = grad_clip
+        self._sampling_parameters = sampling_parameters
 
     @property
     def cuda_device(self) -> int:
@@ -196,11 +199,22 @@ class Trainer(ABC, Registrable):
         self._pytorch_model.eval()
         metrics = self._fit(dataloader, is_train=False)
         # Calculate mutual info
-        current_mi = self.calc_mutual_info(dataloader)
-        metrics["mutual-info"] = current_mi
+        metrics["mutual-info"] = self.calc_mutual_info(dataloader)
+        # Add samples from the prior
+        metrics["samples"] = self._construct_samples_dataframe()
         # Log metrics only on master with run_on_rank_zero decorator
         training_util.log_metrics(mode_str=desc, info=info, metrics=metrics)
         return metrics
+
+    def _construct_samples_dataframe(self) -> pd.DataFrame:
+        """Construct DataFrame of samples from the prior."""
+        samples, samples_log_prob = self._model.sample(**self._sampling_parameters)
+        samples = self._model.make_output_human_readable(samples)
+        df_dict = {"texts": [], "log_probs": []}
+        for sample, log_prob in zip(samples, samples_log_prob.tolist()):
+            df_dict["texts"].extend(sample)
+            df_dict["log_probs"].extend([log_prob] * len(sample))
+        return pd.DataFrame(df_dict)
 
 
 @Trainer.register("default")

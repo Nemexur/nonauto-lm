@@ -1,7 +1,8 @@
-from typing import Union
+from typing import Union, Dict, Any
 import torch
 import wandb
 import logging
+import pandas as pd
 from pathlib import Path
 from loguru import logger
 from .filters import Filter
@@ -53,10 +54,26 @@ class SaveBatchHandler(logging.Handler):
 class WandBLoggingHandler(logging.Handler):
     """Log metrics to Weights & Biasses if needed."""
 
+    def __init__(self, level: Union[int, str] = logging.NOTSET) -> None:
+        super().__init__(level=level)
+        self._wandb_types_switch = {
+            int: lambda x: x,
+            float: lambda x: x,
+            pd.DataFrame: lambda x: wandb.Table(dataframe=x),
+        }
+
     @run_on_rank_zero
     def emit(self, record: logging.LogRecord) -> None:
         if getattr(logger, "use_wandb", False):
-            wandb.log(record.extra.get("metrics"))
+            metrics = record.extra.get("metrics")
+            metrics_to_log = self._prepare_metrics(metrics)
+            wandb.log(metrics_to_log)
+
+    def _prepare_metrics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            metric: self._wandb_types_switch[type(value)](value)
+            for metric, value in metrics.items()
+        }
 
 
 def setup_logging() -> None:

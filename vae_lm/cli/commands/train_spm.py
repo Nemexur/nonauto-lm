@@ -1,15 +1,15 @@
 from typing import Dict
 import re
 import json
-import shutil
 from pathlib import Path
 from loguru import logger
 import sentencepiece as spm
+from .command import BaseCommand
+from cleo import option, argument
 from torch_nlp_utils.common import Params
-from cleo import option, argument, Command
 
 
-class TrainSentencePieceModelCommand(Command):
+class TrainSentencePieceModelCommand(BaseCommand):
     name = "train-spm"
     description = "Train Sentence Piece Model for BPE encoding."
     arguments = [argument("config", description="Config to use for SPM training.")]
@@ -38,24 +38,7 @@ class TrainSentencePieceModelCommand(Command):
         config = Params.from_file(self.argument("config"), ext_vars=extra_vars)
         # Add serialization directory to config and create it
         serialization_dir = Path(self.option("serialization-dir"))
-        if serialization_dir.exists():
-            confirmed = self.confirm(
-                f"Serialization directory at path `{serialization_dir}` already exists. Delete it?",
-                default=True,
-            )
-            if confirmed:
-                shutil.rmtree(serialization_dir)
-                self.line("Directory successfully deleted!", style="info")
-                serialization_dir.mkdir(exist_ok=False)
-            else:
-                self.add_style("warning", fg="yellow", options=["bold"])
-                self.line(
-                    "Working with current serialization directory then. "
-                    "Probably you know what you are doing.",
-                    style="warning",
-                )
-        else:
-            serialization_dir.mkdir(exist_ok=False)
+        self.prepare_directory(serialization_dir)
         # Log config to console and save
         config["model_prefix"] = str(serialization_dir / config["model_prefix"])
         logger.info(
