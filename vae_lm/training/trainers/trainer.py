@@ -200,8 +200,9 @@ class Trainer(ABC, Registrable):
         metrics = self._fit(dataloader, is_train=False)
         # Calculate mutual info
         metrics["mutual-info"] = self.calc_mutual_info(dataloader)
-        # Add samples from the prior
-        metrics["samples"] = self._construct_samples_dataframe()
+        # Add samples from the prior if needed
+        if self._sampling_parameters is not None:
+            metrics["samples"] = self._construct_samples_dataframe()
         # Log metrics only on master with run_on_rank_zero decorator
         training_util.log_metrics(mode_str=desc, info=info, metrics=metrics)
         return metrics
@@ -239,6 +240,7 @@ class DefaultTrainer(Trainer):
         grad_clip: float = 2.0,
         validation_metric: str = "-loss",
         num_checkpoints: int = None,
+        sampling_parameters: Dict[str, Any] = None,
     ) -> None:
         super().__init__(
             model=model,
@@ -253,6 +255,7 @@ class DefaultTrainer(Trainer):
             grad_clip=grad_clip,
             validation_metric=validation_metric,
             num_checkpoints=num_checkpoints,
+            sampling_parameters=sampling_parameters,
         )
         self._optimizer = optimizer
         self._scheduler = scheduler

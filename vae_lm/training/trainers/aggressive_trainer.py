@@ -44,6 +44,7 @@ class AggressiveTrainer(Trainer):
         num_checkpoints: int = None,
         max_aggressive_iters: int = 100,
         mutual_info_patience: int = 5,
+        sampling_parameters: Dict[str, Any] = None,
     ) -> None:
         super().__init__(
             model=model,
@@ -58,6 +59,7 @@ class AggressiveTrainer(Trainer):
             grad_clip=grad_clip,
             validation_metric=validation_metric,
             num_checkpoints=num_checkpoints,
+            sampling_parameters=sampling_parameters,
         )
         self._encoder_optimizer = encoder_optimizer
         self._decoder_optimizer = decoder_optimizer
@@ -312,6 +314,7 @@ class LazyAggressiveTrainer(AggressiveTrainer):
         num_checkpoints: int = None,
         max_aggressive_iters: int = 100,
         mutual_info_patience: int = 5,
+        sampling_parameters: Dict[str, Any] = None,
     ) -> None:
         super().__init__(
             model=model,
@@ -331,6 +334,7 @@ class LazyAggressiveTrainer(AggressiveTrainer):
             num_checkpoints=num_checkpoints,
             max_aggressive_iters=max_aggressive_iters,
             mutual_info_patience=mutual_info_patience,
+            sampling_parameters=sampling_parameters,
         )
 
     @ddp.on_batch_start
