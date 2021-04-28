@@ -3,7 +3,6 @@ from .encoder import Encoder
 from vae_lm.nn.transformer import TransformerEncoderLayer, PositionalEncoding
 
 
-# TODO: Maybe add output_size and feedforward look allennlp
 @Encoder.register("transformer")
 class TransformerEncoder(Encoder):
     """

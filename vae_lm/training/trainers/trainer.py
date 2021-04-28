@@ -278,7 +278,7 @@ class DefaultTrainer(Trainer):
             device=self._cuda_device, non_blocking=True
         )
         output_dict = self._pytorch_model(**batch).pop("loss_info")
-        loss = output_dict.pop("batch-loss")
+        loss = output_dict.get("batch-loss")
         loss.backward()
         # Gradient Clipping
         if self._grad_norm is not None:
@@ -288,7 +288,6 @@ class DefaultTrainer(Trainer):
         # Update step
         self._perform_one_step()
         metrics = self._model.get_metrics()
-        metrics["batch-loss"] = loss.item()
         # Add metrics from output dict
         metrics.update(
             {k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()}
@@ -307,9 +306,7 @@ class DefaultTrainer(Trainer):
             device=self._cuda_device, non_blocking=True
         )
         output_dict = self._pytorch_model(**batch).pop("loss_info")
-        loss = output_dict.pop("batch-loss")
         metrics = self._model.get_metrics()
-        metrics["batch-loss"] = loss.item()
         # Add metrics from output dict
         metrics.update(
             {k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()}

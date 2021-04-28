@@ -108,7 +108,7 @@ class DefaultPrior(Prior):
         lengths: List[int],
         samples: int = 1,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        lengths = torch.LongTensor(lengths)
+        lengths = torch.LongTensor(lengths).to(self.device)
         if lengths.size(0) == 1:
             lengths = lengths.expand(batch)
         max_length = lengths.max().item()

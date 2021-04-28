@@ -341,14 +341,20 @@ class VAELmModel(TorchModule, Registrable):
         """
         texts = []
         if output_dict["preds"].dim() < 3:
-            preds = output_dict["preds"].unsqueeze(-1)
+            preds = output_dict["preds"].unsqueeze(-2)
         else:
             preds = output_dict["preds"]
         for sample in preds.tolist():
             texts.append(
                 [
                     " ".join(
-                        self._vocab.decode({namespace: x[: x.index(self._end_index)]})[namespace]
+                        self._vocab.decode(
+                            {
+                                namespace: x[: x.index(self._end_index)]
+                                if self._end_index in x
+                                else x
+                            }
+                        )[namespace]
                     )
                     for x in sample
                 ]

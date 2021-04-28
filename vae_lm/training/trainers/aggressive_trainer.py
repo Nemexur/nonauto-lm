@@ -85,7 +85,7 @@ class AggressiveTrainer(Trainer):
                 device=self._cuda_device, non_blocking=True
             )
             output_dict = self._pytorch_model(manual_kl_step=True, **sample).pop("loss_info")
-            loss = output_dict.pop("batch-loss")
+            loss = output_dict.get("batch-loss")
             burn_cur_loss += loss.item()
             loss.backward()
             # Gradient Clipping
@@ -107,7 +107,7 @@ class AggressiveTrainer(Trainer):
             device=self._cuda_device, non_blocking=True
         )
         output_dict = self._pytorch_model(manual_kl_step=True, **batch).pop("loss_info")
-        loss = output_dict.pop("batch-loss")
+        loss = output_dict.get("batch-loss")
         loss.backward()
         # Gradient Clipping
         if self._grad_norm is not None:
@@ -130,7 +130,6 @@ class AggressiveTrainer(Trainer):
         self._model.kl_scheduler_step()
         # Get metrics for tqdm
         metrics = self._model.get_metrics()
-        metrics["batch-loss"] = loss.item()
         metrics["batch-aggressive-steps"] = aggressive_steps
         # Add metrics from output dict
         metrics.update({
@@ -147,9 +146,7 @@ class AggressiveTrainer(Trainer):
             device=self._cuda_device, non_blocking=True
         )
         output_dict = self._pytorch_model(**batch).pop("loss_info")
-        loss = output_dict.pop("batch-loss")
         metrics = self._model.get_metrics()
-        metrics["batch-loss"] = loss.item()
         # Add metrics from output dict
         metrics.update({
             k: v.item() if isinstance(v, torch.Tensor) else v for k, v in output_dict.items()

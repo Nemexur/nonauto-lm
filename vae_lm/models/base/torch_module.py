@@ -103,7 +103,7 @@ class TorchModule(DeviceDtypeModuleMixin):
     and functions to get inputs and outputs sizes.
     """
 
-    @wandb_watch()
+    @wandb_watch(log="all")
     def __call__(self, *args, **kwargs) -> Any:
         return super().__call__(*args, **kwargs)
 
