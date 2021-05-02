@@ -3,9 +3,11 @@ from cleo import Command
 from cleo import Application as BaseApplication
 from .commands import (
     TrainCommand,
-    SampleCommand,
     EvaluateCommand,
     MakeShardsCommand,
+    ItemSampleCommand,
+    PriorSampleCommand,
+    InterpolateSampleCommand,
     TrainSentencePieceModelCommand,
 )
 
@@ -20,8 +22,10 @@ class Application(BaseApplication):
     def get_default_commands(self) -> List[Command]:
         return [
             TrainCommand(),
-            SampleCommand(),
             EvaluateCommand(),
             MakeShardsCommand(),
+            ItemSampleCommand(),
+            PriorSampleCommand(),
+            InterpolateSampleCommand(),
             TrainSentencePieceModelCommand(),
         ]

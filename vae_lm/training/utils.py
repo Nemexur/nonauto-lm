@@ -177,7 +177,7 @@ def configure_world(func: Callable) -> Callable:
         # Set info related to process rank
         is_master = process_rank == 0
         os.environ["LOCAL_RANK"] = str(process_rank)
-        use_wandb = config.get("use_wandb", False)
+        use_wandb = config.pop("use_wandb", False)
         serialization_dir = Path(config["serialization_dir"])
         # Setup world for Distributed Training
         if world_size > 1:
@@ -260,7 +260,10 @@ def log_metrics(
     # Sort by length to make it prettier
     for metric in sorted(metrics, key=lambda x: (len(x), x)):
         metric_value = metrics.get(metric)
-        logger.info(f"{metric.ljust(max_length)} | {metric_value:.4f}")
+        # Log only numbers to stdout as with additional loggers
+        # we might want to log DataFrames, distributions and etc.
+        if isinstance(metric_value, (float, int)):
+            logger.info(f"{metric.ljust(max_length)} | {metric_value:.4f}")
     logger.bind(metrics={f"{mode_str.lower()}/{k}": v for k, v in metrics.items()}).debug(
         "Logging metrics to additional sources."
     )

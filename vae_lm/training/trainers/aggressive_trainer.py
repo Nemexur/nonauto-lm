@@ -255,6 +255,51 @@ class AggressiveTrainer(Trainer):
                 break
         return self._metric_patience.best_metrics if self._metric_patience else validation_metrics
 
+    def _enrich_metrics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        if self._encoder_scheduler is not None:
+            metrics["encoder_lr"] = self._encoder_scheduler.get_current_lr()[0]
+            metrics["decoder_lr"] = self._decoder_scheduler.get_current_lr()[0]
+        else:
+            metrics["lr"] = self._scheduler.get_current_lr()[0]
+        return metrics
+
+    def _get_save_dict(self, **extra_params) -> Dict[str, Any]:
+        save_dict = {
+            "model": self._model.state_dict(),
+            **extra_params,
+        }
+        if self._encoder_scheduler is not None:
+            save_dict["encoder_scheduler"] = self._encoder_scheduler.state_dict()
+            save_dict["decoder_scheduler"] = self._decoder_scheduler.state_dict()
+        else:
+            save_dict["scheduler"] = self._scheduler.state_dict()
+        if self._encoder_optimizer is not None:
+            save_dict["encoder_optimizer"] = self._encoder_optimizer.state_dict()
+            save_dict["decoder_optimizer"] = self._decoder_optimizer.state_dict()
+        else:
+            save_dict["optimizer"] = self._optimizer.state_dict()
+        return save_dict
+
+    def _perform_one_step(self) -> None:
+        # Use separate schedulers if specified
+        # If encoder or decoder is not None
+        # then both of them passed according to init condition.
+        if self._encoder_scheduler is not None:
+            self._encoder_scheduler.step()
+            self._decoder_scheduler.step()
+        else:
+            self._scheduler.step()
+        # If encoder or decoder is not None
+        # then both of them passed according to init condition.
+        if self._encoder_optimizer is not None:
+            self._encoder_optimizer.step()
+            self._decoder_optimizer.step()
+            self._encoder_optimizer.zero_grad()
+            self._decoder_optimizer.zero_grad()
+        else:
+            self._optimizer.step()
+            self._optimizer.zero_grad()
+
     @classmethod
     def from_params(
         cls: Type[T],

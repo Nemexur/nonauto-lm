@@ -84,7 +84,7 @@ class VAELmModel(TorchModule, Registrable):
         label_smoothing: float = 0.0,
     ) -> None:
         super().__init__()
-        self._vocab = vocab
+        self.vocab = vocab
         self._iwae = iwae
         self._recon_scheduler = recon_scheduler
         self._kl_scheduler = kl_scheduler
@@ -100,10 +100,17 @@ class VAELmModel(TorchModule, Registrable):
         }
         # Other
         # TODO: EOS is hardcoded so we probably need to move it to os.enviorn or something else
-        self._end_index = self._vocab.token_to_index("<eos>")
+        self._end_index = self.vocab.token_to_index("<eos>")
 
     @property
     def nsamples_posterior(self) -> int:
+        raise NotImplementedError()
+
+    def set_samples(self, samples: int) -> None:
+        """
+        Set number of samples from posterior.
+        Useful for cli commands with the trained command to variate number of samples.
+        """
         raise NotImplementedError()
 
     @property
@@ -113,8 +120,9 @@ class VAELmModel(TorchModule, Registrable):
     def forward(
         self,
         src_tokens: torch.Tensor,
-        tgt_tokens: torch.Tensor,
+        tgt_tokens: torch.Tensor = None,
         manual_kl_step: bool = False,
+        random: bool = True,
     ) -> Dict[str, torch.Tensor]:
         # srt_tokens ~ (batch size, seq length)
         # tgt_tokens ~ (batch size, seq length)
@@ -125,26 +133,28 @@ class VAELmModel(TorchModule, Registrable):
         # z ~ (batch size * samples, seq length, hidden size) - for NonAuto
         # z ~ (batch size * samples, hidden size) - for Auto
         # posterior_log_prob ~ (batch size * samples)
-        latent, posterior_log_prob = self.sample_from_posterior(src_encoded, random=True)
+        latent, posterior_log_prob = self.sample_from_posterior(src_encoded, random=random)
         # tgt_mask ~ (batch size, seq length)
-        tgt_mask = util.get_tokens_mask(tgt_tokens)
+        tgt_mask = util.get_tokens_mask(tgt_tokens) if tgt_tokens is not None else None
         # tgt_mask ~ (batch * samples, seq length)
         tgt_mask = repeat(
             tgt_mask, "batch seq -> (batch samples) seq", samples=self.nsamples_posterior
-        )
+        ) if tgt_mask is not None else None
         # tgt_tokens ~ (batch * samples, seq length)
         tgt_tokens = repeat(
             tgt_tokens, "batch seq -> (batch samples) seq", samples=self.nsamples_posterior
-        )
+        ) if tgt_tokens is not None else None
         decoded_output = {
-            f"decoder_{x}": self._unwrap_samples(tensor, batch, *tensor.size()[1:])
+            x: self._unwrap_samples(tensor, batch, *tensor.size()[1:])
             for x, tensor in self.decode(latent.z, tgt_mask, target=tgt_tokens).items()
         }
         # prior_log_prob ~ (batch size * samples)
         prior_log_prob = self._get_prior_log_prob(latent, tgt_mask)
+        if tgt_tokens is None:
+            return {"source": src_tokens, "latent": latent.z, **decoded_output}
         # Losses
         # recon_error ~ (batch size, samples)
-        recon_error = decoded_output.pop("decoder_loss")
+        recon_error = decoded_output.pop("loss")
         # posterior_log_prob ~ (batch size, samples)
         # prior_log_prob ~ (batch size, samples)
         kl_loss_output = {
@@ -184,6 +194,7 @@ class VAELmModel(TorchModule, Registrable):
             },
             "source": src_tokens,
             "target": tgt_tokens,
+            "latent": latent.z,
             **decoded_output,
         }
         # Update metrics
@@ -218,7 +229,7 @@ class VAELmModel(TorchModule, Registrable):
         raise NotImplementedError()
 
     def decode(
-        self, z: torch.Tensor, mask: torch.Tensor, target: torch.Tensor = None
+        self, z: torch.Tensor, mask: torch.Tensor = None, target: torch.Tensor = None
     ) -> Dict[str, torch.Tensor]:
         """
         Decode sequence from z and mask.
@@ -249,7 +260,7 @@ class VAELmModel(TorchModule, Registrable):
     def sample(
         self,
         samples: int,
-        lengths: List[int],
+        lengths: List[int] = None,
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         """
         Get samples from prior distribution and decode them.
@@ -259,7 +270,7 @@ class VAELmModel(TorchModule, Registrable):
         samples : `int`, required
             Number of samples to gather.
         lengths : `List[int]`, required
-            Lengths of each sample.
+            Lengths of each sample. Not required for Auto models.
 
         Returns
         -------
@@ -269,6 +280,27 @@ class VAELmModel(TorchModule, Registrable):
         prior_sample = self.sample_from_prior(samples, lengths)
         decoded = self.decode(prior_sample.latent, prior_sample.mask)
         return decoded, prior_sample.log_prob
+
+    def interpolate(self, items: torch.Tensor, samples: int, random: bool = True) -> None:
+        items_encoded = self.encode(items)
+        mask = util.get_tokens_mask(items)
+        # z ~ (batch size * samples, seq length, hidden size) - for NonAuto
+        # z ~ (batch size * samples, hidden size) - for Auto
+        # posterior_log_prob ~ (batch size * samples)
+        latent, posterior_log_prob = self.sample_from_posterior(items_encoded, random=random)
+        latent_item_1, latent_item_2 = latent.z[0], latent.z[1]
+        # Construct linear space between samples
+        linspace = torch.linspace(0, 1, samples, device=self.device)
+        latent_linspace = linspace.view(-1, *(1 for _ in range(latent.z.dim() - 1)))
+        latent_linspace_span = latent_item_2 * latent_linspace + latent_item_1 * (1 - latent_linspace)
+        if latent.z.dim() > 2:
+            mask_linspace = linspace.view(-1, 1)
+            mask_linspace_span = mask[1] * mask_linspace + mask[0] * (1 - mask_linspace)
+        else:
+            mask_linspace_span = None
+        # Decoder them
+        decoded_output = self.decode(latent_linspace_span, mask=mask_linspace_span)
+        return decoded_output
 
     def sample_from_prior(
         self,
@@ -340,15 +372,14 @@ class VAELmModel(TorchModule, Registrable):
         This method `modifies` the input dictionary, and also `returns` the same dictionary.
         """
         texts = []
-        if output_dict["preds"].dim() < 3:
-            preds = output_dict["preds"].unsqueeze(-2)
-        else:
-            preds = output_dict["preds"]
+        preds = output_dict.get("preds")
+        if preds.dim() < 3:
+            preds = preds.unsqueeze(-2)
         for sample in preds.tolist():
             texts.append(
                 [
                     " ".join(
-                        self._vocab.decode(
+                        self.vocab.decode(
                             {
                                 namespace: x[: x.index(self._end_index)]
                                 if self._end_index in x

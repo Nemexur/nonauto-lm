@@ -71,19 +71,22 @@ class IMDBDatasetReader(DatasetReader):
                         # We come to this statement only if number of tokens is less than max length
                         # and we should obviously keep this sample.
                         pass
-                if self._spm_model is not None:
-                    encoded_tokens = self._spm_model.encode(tokens)
-                    masked_tokens = (
-                        self.sample_masking(encoded_tokens)
-                        if self._sample_masking else encoded_tokens
-                    )
-                else:
-                    # Different objects for tokens and target
-                    masked_tokens, encoded_tokens = tokens.split(), tokens.split()
-                yield {
-                    "tokens": [self._sos] + masked_tokens + [self._eos],
-                    "target": [self._sos] + encoded_tokens + [self._eos],
-                }
+                yield self.item_to_instance(tokens)
+
+    def item_to_instance(self, tokens: str) -> Dict[str, List[str]]:
+        if self._spm_model is not None:
+            encoded_tokens = self._spm_model.encode(tokens)
+            masked_tokens = (
+                self.sample_masking(encoded_tokens)
+                if self._sample_masking else encoded_tokens
+            )
+        else:
+            # Different objects for tokens and target
+            masked_tokens, encoded_tokens = tokens.split(), tokens.split()
+        return {
+            "tokens": [self._sos] + masked_tokens + [self._eos],
+            "target": [self._sos] + encoded_tokens + [self._eos],
+        }
 
     def sample_masking(self, tokens: List[str]) -> List[str]:
         num_changes = 0

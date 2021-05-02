@@ -56,6 +56,9 @@ class NonAutoModel(VAELmModel):
     def nsamples_posterior(self) -> int:
         return self._posterior.samples
 
+    def set_samples(self, samples: int) -> None:
+        self._posterior.samples = samples
+
     @overrides
     def encode(self, tokens: torch.Tensor) -> EncoderOutput:
         """

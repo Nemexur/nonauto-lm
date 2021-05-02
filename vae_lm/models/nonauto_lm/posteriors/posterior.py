@@ -118,7 +118,7 @@ class Posterior(TorchModule, Registrable):
         # sample ~ (batch size, samples, seq length, hidden size)
         sample = (
             self.base_dist.sample((self._mu.size(0), self.samples, self._mu.size(1)))
-            if random else self._mu.new_zeros((self._mu.size(0), self.samples, self._mu.size()[1:]))
+            if random else self._mu.new_zeros((self._mu.size(0), self.samples, *self._mu.size()[1:]))
         )
         z = self._mu.unsqueeze(1) + sample * self._sigma.unsqueeze(1)
         # mask ~ (batch size * samples, seq length)

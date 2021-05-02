@@ -16,9 +16,11 @@ class Decoder(ABC, TorchModule, Registrable):
         embedder: Embedder,
         sos_index: int,
         eos_index: int,
+        unk_index: int,
         max_timesteps: int,
         teacher_forcing_ratio: float,
-        beam_size: int = 2,
+        word_dropout: float = None,
+        beam_size: int = 1,
         skip_z: bool = False,
     ) -> None:
         super().__init__()
@@ -27,10 +29,12 @@ class Decoder(ABC, TorchModule, Registrable):
         self._embedder = embedder
         self._sos_index = sos_index
         self._eos_index = eos_index
+        self._unk_index = unk_index
         self._max_timesteps = max_timesteps
         self._teacher_forcing_ratio = teacher_forcing_ratio
+        self._word_dropout = word_dropout or 0.0
         self._skip_z = skip_z
-        self._beam_search = BeamSearch(eos_index, max_timesteps, beam_size=beam_size)
+        self._beam_search = BeamSearch(eos_index, max_timesteps, beam_size=1)
 
     def forward(self, z: torch.Tensor, target: torch.Tensor = None) -> torch.Tensor:
         # Get Decoder State
@@ -110,8 +114,16 @@ class Decoder(ABC, TorchModule, Registrable):
     def _choose_input(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         input_choice = target
         if self.training:
+            # Construct tensor for unk
+            unk_index = target.new_full((target.size(0),), fill_value=self._unk_index).long()
+            # Sample probability to of using unk index in the current step
+            use_word_dropout = True if random.random() < self._word_dropout else False
+            # Whether to use target of model prediction in the current step
             use_teacher_forcing = True if random.random() < self._teacher_forcing_ratio else False
-            input_choice = target if use_teacher_forcing else prediction
+            input_choice = (
+                unk_index if use_word_dropout
+                else target if use_teacher_forcing else prediction
+            )
         return input_choice
 
     def _init_decoder_state(self, latent: torch.Tensor) -> Dict[str, torch.Tensor]:

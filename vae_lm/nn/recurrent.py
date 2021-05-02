@@ -127,7 +127,7 @@ class RecurrentCell(TorchModule, Registrable):
     """
     Wrapper over Recurrent Cell Modules like `RNNCell`, `LSTMCell` and `GRUCell` in PyTorch.
     """
-    def __init__(self, module: torch.nn.Module) -> None:
+    def __init__(self, module: torch.nn.RNNCellBase) -> None:
         super().__init__()
         self._module = module
 

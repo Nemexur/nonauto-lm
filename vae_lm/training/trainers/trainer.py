@@ -205,6 +205,8 @@ class Trainer(ABC, Registrable):
             metrics["samples"] = self._construct_samples_dataframe()
         # Log metrics only on master with run_on_rank_zero decorator
         training_util.log_metrics(mode_str=desc, info=info, metrics=metrics)
+        # Pop samples as we do not want save them in the checkpoint
+        metrics.pop("samples")
         return metrics
 
     def _construct_samples_dataframe(self) -> pd.DataFrame:
@@ -212,7 +214,7 @@ class Trainer(ABC, Registrable):
         samples, samples_log_prob = self._model.sample(**self._sampling_parameters)
         samples = self._model.make_output_human_readable(samples)
         df_dict = {"texts": [], "log_probs": []}
-        for sample, log_prob in zip(samples, samples_log_prob.tolist()):
+        for sample, log_prob in zip(samples["texts"], samples_log_prob.tolist()):
             df_dict["texts"].extend(sample)
             df_dict["log_probs"].extend([log_prob] * len(sample))
         return pd.DataFrame(df_dict)
