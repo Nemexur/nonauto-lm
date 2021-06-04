@@ -1,0 +1,65 @@
+[tool.poetry]
+name = "vae-lm"
+version = "0.1.0"
+description = "Implementation of VAE models (Auto and NonAuto) for text generation."
+authors = ["nemexur <alex.milogradsky@gmail.com>"]
+
+[[tool.poetry.source]]
+name = "pytorch-registry"
+url = "https://eternalphane.github.io/pytorch-pypi"
+
+[tool.poetry.dependencies]
+python = "~3.7.3"
+torch = [
+  {version = "1.7.0", platform = "darwin"},
+  {version = "1.7.0+cu101", source = "pytorch-registry", platform = "linux"},
+]
+loguru = "^0.5.3"
+tqdm = "^4.55.0"
+cleo = "^0.8.1"
+jsonnet = "^0.17.0"
+scikit-learn = "^0.24.0"
+overrides = "^3.1.0"
+cached-property = "^1.5.2"
+einops = "^0.3.0"
+wandb = "^0.10.14"
+sentencepiece = "^0.1.95"
+rich = "^9.13.0"
+pandas = "^1.2.4"
+torch-nlp-utils = {git = "https://github.com/Nemexur/torch-nlp-utils.git"}
+
+[tool.poetry.dev-dependencies]
+flake8 = "^3.8.4"
+ipython = "^7.19.0"
+jedi = "0.17.2"
+jupyterlab = "^3.0.0"
+ipykernel = "^5.4.2"
+black = "^20.8b1"
+
+[tool.black]
+line-length = 100
+target-version = ["py37"]
+include = '\.pyi?$'
+exclude = '''
+(
+      __pycache__
+    | \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | \.vscode
+    | _build
+    | buck-out
+    | build
+    | dist
+)
+'''
+
+[tool.poetry.scripts]
+vae-lm = 'vae_lm.cli:main'
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
