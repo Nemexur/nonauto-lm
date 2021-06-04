@@ -16,6 +16,7 @@ class Glow(Flow):
         num_levels (int): Number of levels to construct. Counter for recursion.
         num_steps (int): Number of steps of flow for each level.
     """
+
     def __init__(
         self,
         actnorm: ActNorm,
@@ -55,7 +56,9 @@ class Glow(Flow):
             z = unsqueeze(z)
         return z, sum_log_det
 
-    def backward(self, z: torch.Tensor, mask: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(
+        self, z: torch.Tensor, mask: torch.Tensor = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         sum_log_det = z.new_zeros(z.size(0))
         if self._next is not None:
             x, mask = squeeze(z, mask=mask)
@@ -76,23 +79,19 @@ class FlowStep(torch.nn.Module):
     ) -> None:
         # Activation normalization, invertible 1x1 convolution, affine coupling
         self._actnorm = actnorm
-        self._inv_linear = invertible_linear 
+        self._inv_linear = invertible_linear
         self._coupling = coupling
 
     def forward(self, z: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         sum_log_det = z.new_zeros(z.size(0))
-        for layer in [
-            self._actnorm, self._inv_linear, self._coupling
-        ]:
+        for layer in [self._actnorm, self._inv_linear, self._coupling]:
             z, log_det = layer(z, mask=mask)
             sum_log_det += log_det
         return z, sum_log_det
 
     def backward(self, z: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         sum_log_det = z.new_zeros(z.size(0))
-        for layer in reversed([
-            self._actnorm, self._inv_linear, self._coupling
-        ]):
+        for layer in reversed([self._actnorm, self._inv_linear, self._coupling]):
             z, log_det = layer.backward(z, mask=mask)
             sum_log_det += log_det
         return z, sum_log_det
@@ -103,7 +102,9 @@ def split(z: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     return z[..., :split_size], z[..., split_size:]
 
 
-def squeeze(x: torch.Tensor, mask: torch.Tensor, factor: int = 2) -> Tuple[torch.Tensor, torch.Tensor]:
+def squeeze(
+    x: torch.Tensor, mask: torch.Tensor, factor: int = 2
+) -> Tuple[torch.Tensor, torch.Tensor]:
     assert factor >= 1
     if factor == 1:
         return x

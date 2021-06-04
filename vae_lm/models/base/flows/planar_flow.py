@@ -26,7 +26,7 @@ class NonAutoPlanarFlow(Flow):
 
     def _log_abs_det_jacobian(self, z: torch.Tensor) -> torch.Tensor:
         inner = torch.einsum("bsi,ih->bsh", z, self._w) + self._b
-        h_grad = 1 - torch.tanh(inner)**2
+        h_grad = 1 - torch.tanh(inner) ** 2
         activation = torch.einsum("bsh,ih->bsi", h_grad, self._w)
         det = 1 + torch.einsum("bsi,iz->bsz", activation, self._u)
         return torch.log(det.abs() + 1e-13).squeeze(-1)
@@ -54,7 +54,7 @@ class AutoPlanarFlow(Flow):
 
     def _log_abs_det_jacobian(self, z: torch.Tensor) -> torch.Tensor:
         inner = torch.einsum("bi,ih->bh", z, self._w) + self._b
-        h_grad = 1 - torch.tanh(inner)**2
+        h_grad = 1 - torch.tanh(inner) ** 2
         activation = torch.einsum("bh,ih->bi", h_grad, self._w)
         det = 1 + torch.einsum("bi,iz->bz", activation, self._u)
         return torch.log(det.abs() + 1e-13).squeeze(-1)

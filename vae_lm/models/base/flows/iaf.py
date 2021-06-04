@@ -17,6 +17,7 @@ class IAFlow(MAFlow):
         Simply flipping the transformation on last dimension.
         Works good when we stack IAF.
     """
+
     def __init__(self, made: MADE, parity: bool) -> None:
         super().__init__(made, parity)
         self.forward, self.backward = self.backward, self.forward

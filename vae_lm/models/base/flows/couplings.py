@@ -6,6 +6,7 @@ from vae_lm.nn.activation import Activation
 from vae_lm.nn.feedforward import FeedForward
 from vae_lm.nn.recurrent import RecurrentCore
 from vae_lm.nn.transformer import TransformerDecoderLayer, PositionalEncoding
+
 # Extra
 from torch_nlp_utils.common import Registrable
 
@@ -62,10 +63,12 @@ class AttentionCoupling(Coupling):
     ) -> None:
         super().__init__(input_size)
         self._pos_enc = PositionalEncoding(input_size)
-        self._layers = torch.nn.ModuleList([
-            TransformerDecoderLayer(input_size, hidden_size, num_heads, dropout=dropout)
-            for _ in range(num_layers)
-        ])
+        self._layers = torch.nn.ModuleList(
+            [
+                TransformerDecoderLayer(input_size, hidden_size, num_heads, dropout=dropout)
+                for _ in range(num_layers)
+            ]
+        )
         if dropout > 0.0:
             self._dropout = torch.nn.Dropout(dropout)
         else:
@@ -128,13 +131,16 @@ class NICECoupling(Flow):
     coupling : `Coupling`, required
         Coupling layer to use for Norm Flow.
     """
+
     def __init__(self, coupling: Coupling) -> None:
         super().__init__()
         assert coupling.get_input_size() // 2, "Input features should be divesable by 2."
         self._s_net = deepcopy(coupling)
         self._t_net = deepcopy(coupling)
 
-    def forward(self, z: torch.Tensor, mask: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, z: torch.Tensor, mask: torch.Tensor = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         x0, x1 = self._split(z)
         # s ~ (batch size, seq length, hidden size // 2) - for NonAuto
         # s ~ (batch size, hidden size // 2) - for Auto

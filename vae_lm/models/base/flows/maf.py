@@ -26,7 +26,9 @@ class MAFlow(Flow):
         self._parity = parity
 
     @overrides
-    def forward(self, z: torch.Tensor, mask: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, z: torch.Tensor, mask: torch.Tensor = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # z ~ (batch size, seq length, hidden size) - for NonAuto
         # z ~ (batch size, hidden size) - for Auto
         # mask ~ (batch size, seq length)
@@ -43,7 +45,9 @@ class MAFlow(Flow):
         return z, log_det
 
     @overrides
-    def backward(self, z: torch.Tensor, mask: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(
+        self, z: torch.Tensor, mask: torch.Tensor = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         x = torch.zeros_like(z)
         log_det = torch.zeros(z.size(0), z.size(1))
         z = z.flip(dims=(-1,)) if self._parity else z

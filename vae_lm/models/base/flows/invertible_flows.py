@@ -60,9 +60,7 @@ class InvertibleMultiHeadFlow(Flow):
     @overrides
     def forward(self, z: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, N1, N2, ..., heads, in_features/ heads]
-        out = rearrange(
-            z, "batch seq (head size) -> batch seq head size", head=self._num_heads
-        )
+        out = rearrange(z, "batch seq (head size) -> batch seq head size", head=self._num_heads)
         out = F.linear(out, self._weight)
         out = rearrange(out, "batch seq head size -> batch seq (head size)")
         _, logdet = torch.slogdet(self._weight)
@@ -75,9 +73,7 @@ class InvertibleMultiHeadFlow(Flow):
     def backward(self, z: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         weight_inv = torch.inverse(self._weight.double()).float()
         # [batch, N1, N2, ..., heads, in_features/ heads]
-        out = rearrange(
-            z, "batch seq (head size) -> batch seq head size", head=self._num_heads
-        )
+        out = rearrange(z, "batch seq (head size) -> batch seq head size", head=self._num_heads)
         out = F.linear(out, weight_inv)
         out = rearrange(out, "batch seq head size -> batch seq (head size)")
         _, logdet = torch.slogdet(weight_inv)

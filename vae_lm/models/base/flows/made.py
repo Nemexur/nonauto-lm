@@ -56,6 +56,7 @@ class MADE(torch.nn.Module):
     activation : `str`, optional (default = `"elu"`)
         Activation after `MaskedLinear` layer.
     """
+
     def __init__(
         self,
         input_size: int,
@@ -71,10 +72,12 @@ class MADE(torch.nn.Module):
         self._nets = []
         hs = [input_size] + hidden_sizes + [self._output_size]
         for h0, h1 in zip(hs, hs[1:]):
-            self._nets.extend([
-                MaskedLinear(h0, h1),
-                Activation.by_name(activation),
-            ])
+            self._nets.extend(
+                [
+                    MaskedLinear(h0, h1),
+                    Activation.by_name(activation),
+                ]
+            )
         # Pop last activation for output linear
         self._nets.pop()
         self._nets = torch.nn.Sequential(*self._nets)
@@ -94,7 +97,8 @@ class MADE(torch.nn.Module):
         # Sample the order of the inputs and the connectivity of all neurons
         # Every mask is of last dimension size
         self._masks[-1] = (
-            np.arange(self._input_size) if not self._permute_order
+            np.arange(self._input_size)
+            if not self._permute_order
             else rng.permutation(self._input_size)
         )
         for layer in range(num_layers):

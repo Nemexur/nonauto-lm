@@ -15,7 +15,7 @@ class ActNorm(Flow):
 
     def reset_parameters(self) -> None:
         torch.nn.init.normal_(self._log_scale, mean=0, std=0.05)
-        torch.nn.init.constant_(self._bias, 0.)
+        torch.nn.init.constant_(self._bias, 0.0)
 
     @overrides
     def forward(self, z: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
@@ -28,7 +28,7 @@ class ActNorm(Flow):
             self._is_initted = True
         # z ~ (batch size, seq length, hidden size) - for NonAuto
         # z ~ (batch size, hidden size) - for Auto
-        z = (z * self._log_scale.exp() + self._bias)
+        z = z * self._log_scale.exp() + self._bias
         if mask is not None:
             z *= mask.unsqueeze(-1)
         # log_det ~ (1)

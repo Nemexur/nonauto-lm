@@ -36,7 +36,7 @@ class NonAutoRadialFlow(Flow):
         r = torch.norm(z - self._z0, dim=-1, keepdim=True)
         # h ~ (batch size, seq length)
         h = 1 / (self._alpha + r)
-        h_grad = -1 / (self._alpha + r)**2
+        h_grad = -1 / (self._alpha + r) ** 2
         beta_h = self._beta * h
         det = ((1 + beta_h) ** self._input_size - 1) * (1 + beta_h + self._beta * h_grad * r)
         return torch.log(det.abs() + 1e-13).squeeze(-1)
@@ -74,7 +74,7 @@ class AutoRadialFlow(Flow):
         r = torch.norm(z - self._z0, dim=-1, keepdim=True)
         # h ~ (batch size)
         h = 1 / (self._alpha + r)
-        h_grad = -1 / (self._alpha + r)**2
+        h_grad = -1 / (self._alpha + r) ** 2
         beta_h = self._beta * h
         det = ((1 + beta_h) ** self._input_size - 1) * (1 + beta_h + self._beta * h_grad * r)
         return torch.log(det.abs() + 1e-13).squeeze(-1)
