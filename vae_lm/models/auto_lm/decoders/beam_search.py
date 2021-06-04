@@ -15,7 +15,7 @@ class BeamSearch:
 
     Parameters
     ----------
-    end_index : `int`
+    end_index : `int`, required
         The index of the "stop" or "end" token in the target vocabulary.
     max_steps : `int`, optional (default = `50`)
         The maximum number of decoding steps to take, i.e. the maximum length
