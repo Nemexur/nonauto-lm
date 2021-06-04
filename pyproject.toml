@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "vae-lm"
 version = "0.1.0"
-description = ""
+description = "Implementation of VAE models (Auto and NonAuto) for text generation."
 authors = ["nemexur <alex.milogradsky@gmail.com>"]
 
 [[tool.poetry.source]]
